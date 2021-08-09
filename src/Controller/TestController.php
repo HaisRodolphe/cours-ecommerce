@@ -12,10 +12,10 @@ class TestController
         dd("Ca Fonctionne");
     }
 
-    public function test(Request $request)
+    public function test(Request $request, $age)
     {
 
-        $age = $request->query->get('age', 0);
+        //$age = $request->attributes->get('age', 0);
         // $age = 0;
 
         // if (!empty($_GET['age'])) {
