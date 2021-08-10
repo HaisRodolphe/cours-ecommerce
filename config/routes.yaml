@@ -2,18 +2,6 @@ index:
   path: /
   controller: App\Controller\TestController::index
 
-test:
-  path: /test/{age<\d+>?0}
-  # {age<\d+>?0}
-  # defaults:
-  #   age: 0
-  # requirements:
-  #   age: \d+
-  controller : App\Controller\TestController::test
-  methode:  [GET, POST]
-  host: localhost
-  # api.monsite.com && www.monsite.com && monsite.com
-  # api.monsite.com / www.monsite.com / monsite.com
-  schemes: [https, http]
+
   
   
