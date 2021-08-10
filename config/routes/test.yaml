@@ -1,14 +1,13 @@
-
-test:
-  path: /test/{age<\d+>?0}
+#gittest:
+  #path: /test/{age<\d+>?0}
   # {age<\d+>?0}
   # defaults:
   #   age: 0
   # requirements:
   #   age: \d+
-  controller : App\Controller\TestController::test
-  methode:  [GET, POST]
-  host: localhost
+  #controller : App\Controller\TestController::test
+  #methods: [GET, POST]
+  # host: 127.0.0.1:8000
   # api.monsite.com && www.monsite.com && monsite.com
   # api.monsite.com / www.monsite.com / monsite.com
-  schemes: [https, http]
+  #schemes: [https, http]
