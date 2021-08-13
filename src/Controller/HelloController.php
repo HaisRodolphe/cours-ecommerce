@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use Twig\Environment;
 use App\Taxes\Calculator;
 use Cocur\Slugify\Slugify;
 use Psr\Log\LoggerInterface;
@@ -16,8 +17,10 @@ class HelloController
      * @Route("/hello/{prenom?World}", name="name")
      */
 
-    public function Hello($prenom, LoggerInterface $logger, Calculator $calculator, Slugify $slugify): Response
+    public function Hello($prenom, LoggerInterface $logger, Calculator $calculator, Slugify $slugify, Environment $twig): Response
     {
+        dump($slugify);
+
         dump($slugify->slugify("Hello World"));
 
         $logger->error("Mon message de log !");
