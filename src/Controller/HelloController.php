@@ -19,7 +19,7 @@ class HelloController
 
     public function Hello($prenom, LoggerInterface $logger, Calculator $calculator, Slugify $slugify, Environment $twig): Response
     {
-        dump($slugify);
+        dump($twig);
 
         dump($slugify->slugify("Hello World"));
 
