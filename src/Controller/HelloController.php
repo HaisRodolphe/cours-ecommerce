@@ -2,53 +2,21 @@
 
 namespace App\Controller;
 
-use Symfony\Component\HttpFoundation\Response;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
-use Twig\Environment;
 
-class HelloController
+class HelloController extends AbstractController
 {
-    protected $twig;
-
-    public function __construct(Environment $twig)
-    {
-        $this->twig = $twig;
-    }
-
 
     /**
      * @Route("/hello/{prenom?World}", name="name")
      */
 
-    public function Hello($prenom = "world"): Response
+    public function Hello($prenom = "world")
     {
-        $html = $this->twig->render('hello.html.twig', [
-            'prenom' => $prenom,
-            'age' => 5,
-            'prenoms' => [
-                'Céline',
-                'Rodolphe',
-                'Typhaine',
-                'Leonie'
-            ],
-            //Boucle for et if
-            'ages' => [
-                12,
-                18,
-                29,
-                15
-            ],
-
-            // tableaux assiociatif ou des objets
-            'formateur' => [
-                'prenom' => 'Rodolphe',
-                'nom' => 'Has',
-                'age' => '42'
-            ],
-            'formateur1' => ['prenom' => 'Rodolphe', 'nom' => 'ha'],
-            'formateur2' => ['prenom' => 'Celine', 'nom' => 'chacha'],
+        return $this->render('hello.html.twig', [
+            'prenom' => $prenom
         ]);
-        return new Response($html);
     }
 
     /**
@@ -60,11 +28,5 @@ class HelloController
         return $this->render('example.html.twig', [
             'age' => 33
         ]);
-    }
-
-    protected function render(string $path, array $variables = [])
-    {
-        $html = $this->twig->render($path, $variables);
-        return new Response($html);
     }
 }
