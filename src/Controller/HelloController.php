@@ -2,42 +2,69 @@
 
 namespace App\Controller;
 
-use App\Taxes\Detector;
-use Twig\Environment;
-use App\Taxes\Calculator;
-use App\Taxes\Calculatorttc;
-use Cocur\Slugify\Slugify;
-use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
-
+use Twig\Environment;
 
 class HelloController
 {
+    protected $twig;
+
+    public function __construct(Environment $twig)
+    {
+        $this->twig = $twig;
+    }
+
 
     /**
      * @Route("/hello/{prenom?World}", name="name")
      */
 
-    public function Hello($prenom, LoggerInterface $logger, Calculator $calculator, Slugify $slugify, Environment $twig, Detector $detector, Calculatorttc $calculatorttc): Response
+    public function Hello($prenom = "world"): Response
     {
-        dump($detector->detect(101));
-        dump($detector->detect(10));
+        $html = $this->twig->render('hello.html.twig', [
+            'prenom' => $prenom,
+            'age' => 5,
+            'prenoms' => [
+                'Céline',
+                'Rodolphe',
+                'Typhaine',
+                'Leonie'
+            ],
+            //Boucle for et if
+            'ages' => [
+                12,
+                18,
+                29,
+                15
+            ],
 
-        dump($twig);
+            // tableaux assiociatif ou des objets
+            'formateur' => [
+                'prenom' => 'Rodolphe',
+                'nom' => 'Has',
+                'age' => '42'
+            ],
+            'formateur1' => ['prenom' => 'Rodolphe', 'nom' => 'ha'],
+            'formateur2' => ['prenom' => 'Celine', 'nom' => 'chacha'],
+        ]);
+        return new Response($html);
+    }
 
-        dump($slugify->slugify("Hello World"));
+    /**
+     * @Route("/example", name="example")
+     */
+    public function example()
+    {
 
-        $logger->error("Mon message de log !");
+        return $this->render('example.html.twig', [
+            'age' => 33
+        ]);
+    }
 
-        $tva = $calculator->calcul(100);
-
-        dump($tva);
-
-        $prixttc = $calculatorttc->calcul(50);
-
-        dump("Prixttc + (100 - tva) = $prixttc");
-
-        return new Response("Hello $prenom");
+    protected function render(string $path, array $variables = [])
+    {
+        $html = $this->twig->render($path, $variables);
+        return new Response($html);
     }
 }

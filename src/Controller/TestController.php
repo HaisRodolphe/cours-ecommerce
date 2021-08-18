@@ -17,10 +17,10 @@ class TestController
     }
 
     /**
-     * @Route("/test/{age<\d+>?0}", name="test", methods={"GET", "POST"}, schemes={"http", "https"})
+     * @Route("/test/{age<\d+>?0}{prenom}", name="test", methods={"GET", "POST"}, schemes={"http", "https"})
      */
 
-    public function test(Request $request, $age)
+    public function test(Request $request, $age, $prenom)
     {
 
         //$age = $request->attributes->get('age', 0);
@@ -30,6 +30,6 @@ class TestController
         //     $age = $_GET['age'];
         // };
 
-        return new Response("Vous avez $age ans !");
+        return new Response("Vous avez $age ans ! $prenom");
     }
 }
