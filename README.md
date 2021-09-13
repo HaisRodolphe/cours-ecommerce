@@ -1,10 +1,22 @@
 # cours-ecommerce
-<h1>Heading</h1>
+<h3>Symfony 5</h3>
 
-<h2>Sub-heading</h2>
+<h2>3 Notions a connaitre</h2>
+<h3>Les entités qui représente (les enregistrements).</h3>
+<h3>Les Repositories qui font remonté (les selections des entitées)</h3>
+<h3>Le Manager qui permet de manipuler des enregistrement dans notre base de donnée(en les supriments, les modifiers ou les ajoutées).
+<h2>Le systhéme de migration</h2>
+<p> qui permet de créer des script pour passée d'un etat de  actuel à l'etat ulterieur, permet d'ajouter ou d'annuler une migration.
+<h2>Systhéme de fixtures</h2>
+<p>Qui permet de créer de fausse données avec des bibliothéques Faker</p>
 
-<p>Paragraphs are separated
-by a blank line.</p>
+<h2>Doctrine qui permet de créer des associations (Relations) entre les entitées.</h2>
+<p>Avec OneToMany, ManyToOne, ManyToMany et OneTOne. Si ont veux passé un produit dans une category 
+ j'utilise $produit->setCategory($category). Dans twig si j'ai besoin de passée une category {{ product.category }}</P>
+<h2>Github</h2>
+<h3>git status</h3>
+<h3>git add .</h3>
+<h3>git commit -m "Mise en place de doctrine et de nos premieres entités"</h3>
 
 <p>Liste des commandes lier aux bundel.<br />
 php bin/console</p>
@@ -192,3 +204,5 @@ Mais chaque product peu avoir qu'une Category.
 -L'option pourra etre Null.
 >yes
 -------------------------------------------
+Symfony 5 et le Debugger Pack
+10- composer require debug
