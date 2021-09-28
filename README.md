@@ -116,7 +116,10 @@ Modification d'une entity déjà existante appelé "exp:Product"
 
 Controle du repository
 7-6-php bin/console debug:autowiring --all repository
-
+Permet de trouvet les différent service dans symfony
+-php bin/console debug:autowiring --all
+Pour chercher les services de l'url exemple:
+-php bin/console debug:autowiring --all url
 -------------------------------------------
 
 Creation de fixtures, des fausse donner pour simulet un projet.
@@ -206,3 +209,740 @@ Mais chaque product peu avoir qu'une Category.
 -------------------------------------------
 Symfony 5 et le Debugger Pack
 10- composer require debug
+-------------------------------------------
+<h2>Twig : aller plus loin</h2>
+Voir :show.html.twig
+Routes "statiques" : le problème des URLs écrites en dur.
+*Dans un projet il faut evité d'ecrire les routes en dur {{ product.category.name }},
+ {{ product.name }}il faut utilisé.
+Génération des URLs avec l'UrlGenerator et la fonction path()
+*Pour chercher les services de l'url exemple:
+-php bin/console debug:autowiring --all url
+
+Les classes et interfaces suivantes peuvent être utilisées comme indices de type lors du câblage automatique :
+ (ne montrant que les classes/interfaces correspondant à l'URL)
+
+Un service d'assistance pour manipuler les URL à l'intérieur et à l'extérieur de la portée de la demande.
+-Symfony\Component\HttpFoundation\UrlHelper (url_helper)
+
+UrlGeneratorInterface est l'interface que toutes les classes de générateur d'URL doivent implémenter.
+-Symfony\Component\Routing\Generator\UrlGeneratorInterface (router.default)
+
+UrlMatcherInterface est l'interface que toutes les classes de correspondance d'URL doivent implémenter.
+-Symfony\Component\Routing\Matcher\UrlMatcherInterface (router.default)
+
+Astuce de pro : utilisez des interfaces dans vos types-hints au lieu de classes pour bénéficier du principe d'inversion de dépendance.
+-Dans notre cas nous allon utliser "UrlGeneratorInterface".
+Pour atteindre la page home.html.twig.
+<a href="{{ path('homepage') }}">Accueil</a>
+-Dans category.html.twig pour afficher le detail du product sur le page show.html.twig.
+Le resultat de la fonction 'path',comme premier paramétre, le nom de ma route 'product_show', 
+en deuxieme paramétre un tableau assiociatif avec le différent paramétre de la route 'category_slug' le slug de la 
+category : 'p.category.slug' et un paramétre slug qui prendra 'p.slug'.
+<a href="{{ path('product_show', {'category_slug': p.category.slug, 'slug':p.slug } ) }}" class="btn btn-primery btn-sm">
+Exemple UrlGeneratorInterface:
+Dans le controller:
+$url = $urlGenerator->generate('nom_de_la_route',[
+	'param1 = 'valeur',
+	'param2 = 'valeur',
+])
+Dans twig :
+<a href="{{ path('nom_de_la _route', {
+	'param1': 'valeur',
+	'param2' : 'valeur'
+})}}>
+</a>
+
+-------------------------------------------
+<h1>Les formulaires dans Symfony 5</h1>
+
+Documentation officielle de Symfony pour débuter avec les forms : 
+https://symfony.com/doc/current/forms.html
+Documentation officielle de Symfony sur le composant symfony/form : 
+https://symfony.com/doc/current/components/form.html
+Documentation officielle de Symfony - La liste des types de champs existants : 
+https://symfony.com/doc/current/reference/forms/types.html
+Installer le composant symfony/form
+11- composer require form
+
+Autowirable Types
+-----------------
+Les classes et interfaces suivantes peuvent être utilisées comme indices de type lors du câblage automatique :
+(affichant uniquement le formulaire de correspondance des classes/interfaces form)
+
+Permet de créer un formulaire basé sur un nom, une classe ou une propriété.
+Symfony\Component\Form\FormFactoryInterface (form.factory)
+
+Le registre central du composant Form.
+Symfony\Component\Form\FormRegistryInterface (form.registry)
+
+Crée des instances ResolvedFormTypeInterface.
+Symfony\Component\Form\ResolvedFormTypeFactoryInterface (form.resolved_type_factory)
+ 
+Formate les liens des fichiers de débogage.
+Symfony\Component\HttpKernel\Debug\FileLinkFormatter (debug.file_link_formatter)
+
+Astuce de pro : utilisez des interfaces dans vos types-hints au lieu de classes pour bénéficier 
+du principe d'inversion de dépendance.
+
+Dans notre projet nous allons utiliser FormFactoryInterface.
+Creation d'un formulaire:
+builder est un configurateur de formulaire
+ProductController.php
+/**
+* @Route("/admin/product/create", name="product_create")
+*/
+public function create(FormFactoryInterface $factory): Response
+{	
+	
+    $builder = $factory->createBuilder();
+
+    $builder->add('name')
+        ->add('shortDescription')
+        ->add('price')
+        ->add('category');
+
+    $form = $builder->getForm();
+
+    $formView = $form->createView();
+
+    return $this->render('product/create.html.twig', [
+        'formView' => $formView
+    ]);
+}
+Affichage dans twig: create.html.twid
+
+{% block body %}
+	<h1>Nouveau produit</h1>
+    Permet d'afficher un formulaire mais il n'est pas assez préssis.
+	{{ form(formView) }}
+{% endblock %}
+
+Donc nous utilisons {{ form_row(formView.name) }} pour péciser le choix de l'affichage
+{% block body %} Ouverture du bloc
+	<h1>Nouveau produit</h1>
+	{# {{ form(formView) }} #}
+	{{ form_start(formView) }} Démarrage du formulaire
+
+	{{ form_errors(formView) }}
+	<div class="row">
+		<div class="col">
+			{{ form_row(formView.name) }} //Affichage du nom
+			{{ form_row(formView.shortDescription) }} //Afichage de la description
+
+		</div>
+		<div class="col">
+			{{ form_row(formView.category) }} //Affichage de la description
+			{{ form_row(formView.price) }} //Affichage du prix
+
+		</div>
+	</div>
+	<br>
+	<button type="submit" class="btn btn-primery">
+		<i class="fas fa-save"></i>
+		Créer le produit
+	</button>
+
+	{{ form_end(formView) }} Fermeture du formulaire
+
+{% endblock %} Fermeture du block
+
+Twig : Les thèmes de formulaires livrés avec Symfony
+Ne pas hesiter à utiliser des thémes déjà existant de symfony.
+https://symfony.com/doc/current/form/form_themes.html
+Que l'on se fait livré dans: twig.yaml
+sous la forme suivant:
+twig:
+    default_path: '%kernel.project_dir%/templates'
+    form_themes:
+        - bootstrap_4_layout.html.twig
+
+Explication d'une commande Forme: ProductController.php
+https://127.0.0.1:8000/admin/product/create
+->add('shortDescription', TextareaType::class, [
+    'label' => 'Description courte',
+    'attr' => [
+    //'class' => 'form-control', //Il ne faut pas intégre la classe dans le controller.
+    'placeholder' => 'Taper une description assez courte mais parlante pour le visiteur'
+    ]
+])
+
+Soumission du formulaire et récupération des données:
+ProductController.php
+
+/**
+* @Route("/admin/product/create", name="product_create")
+*/
+public function create(FormFactoryInterface $factory, Request $request): Response
+{
+
+    $builder = $factory->createBuilder();
+
+    $builder->add('name', TextType::class, [
+        'label' => 'Nom du produit',
+        'attr' => ['placeholder' => 'taper le nom du produit']
+    ])
+    ->add('shortDescription', TextareaType::class, [
+        'label' => 'Description courte',
+        'attr' => [
+            'placeholder' => 'Taper une description assez courte mais parlante pour le visiteur'
+        ]
+    ])
+    ->add('price', MoneyType::class, [
+        'label' => 'Prix du produit',
+        'attr' => [
+            'placeholder' => 'taper le prix du produit en €'
+        ]
+    ])
+    ->add('category', EntityType::class, [
+        'label' => 'catégorie',
+        'placeholder' => '-- Choisir une catégorie --',
+        'class' => Category::class,
+        //'choice_label' => 'name'
+        //choice_label peu aussi retourner un function.
+        'choice_label' => function (Category $category) {
+            return strtoupper($category->getName());
+        }
+    ]);
+
+    $form = $builder->getForm();
+
+    $form->handleRequest($request);
+
+    if ($form->isSubmitted()) {
+        $data = $form->getData();
+
+        $product = new Product;
+        $product->setName($data['name'])
+            ->setShortDescription($data['shortDescription'])
+            ->setPrice($data['price'])
+            ->setCategory($data['category']);
+    }
+
+    $formView = $form->createView();
+
+    return $this->render('product/create.html.twig', [
+        'formView' => $formView
+    ]);
+}
+
+Récupérer les données sous la forme d'un objet précis (data_class)
+
+class ProductController extends AbstractController
+{
+    /**
+     * @Route("/{slug}", name="product_category")
+     */
+    public function category($slug, CategoryRepository $categoryRepository): Response
+    {
+
+        $category = $categoryRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si la cathegory n'existe pas alors, il vas vers une erreur.
+        if (!$category) {
+            throw $this->createNotFoundException("La catégorie demandée n'existe pas");
+        }
+
+        return $this->render('product/category.html.twig', [
+            'slug' => $slug,
+            'category' => $category,
+        ]);
+    }
+    /**
+     * @Route("/{category_slug}/{slug}", name="product_show")
+     */
+    public function show($slug, ProductRepository $productRepository): Response
+    {
+        $product = $productRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si le produit n'existe pas, alors il vas vers une erreur.
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit demandé n'exite pas");
+        }
+
+        return $this->render('product/show.html.twig', [
+            'product' => $product
+        ]);
+    }
+
+    /**
+     * @Route("/admin/product/create", name="product_create")
+     */
+    public function create(FormFactoryInterface $factory, Request $request): Response
+    {
+
+        $builder = $factory->createBuilder(FormType::class, null, [
+            'data_class' => Product::class
+        ]);
+
+        $builder->add('name', TextType::class, [
+            'label' => 'Nom du produit',
+            'attr' => ['placeholder' => 'taper le nom du produit']
+        ])
+            ->add('shortDescription', TextareaType::class, [
+                'label' => 'Description courte',
+                'attr' => [
+                    'placeholder' => 'Taper une description assez courte mais parlante pour le visiteur'
+                ]
+            ])
+            ->add('price', MoneyType::class, [
+                'label' => 'Prix du produit',
+                'attr' => [
+                    'placeholder' => 'taper le prix du produit en €'
+                ]
+            ])
+            ->add('category', EntityType::class, [
+                'label' => 'catégorie',
+                'placeholder' => '-- Choisir une catégorie --',
+                'class' => Category::class,
+                //'choice_label' => 'name'
+                //choice_label peu aussi retourner un function.
+                'choice_label' => function (Category $category) {
+                    return strtoupper($category->getName());
+                }
+            ]);
+
+        $form = $builder->getForm();
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted()) {
+            $$product = $form->getData();
+
+            // $product = new Product;
+            // $product->setName($data['name'])
+            //     ->setShortDescription($data['shortDescription'])
+            //     ->setPrice($data['price'])
+            //     ->setCategory($data['category']);
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('product/create.html.twig', [
+            'formView' => $formView
+        ]);
+    }
+}
+
+Faire persister une entité issue d'un formulaire:
+class ProductController extends AbstractController
+{
+    /**
+     * @Route("/{slug}", name="product_category")
+     */
+    public function category($slug, CategoryRepository $categoryRepository): Response
+    {
+
+        $category = $categoryRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si la cathegory n'existe pas alors, il vas vers une erreur.
+        if (!$category) {
+            throw $this->createNotFoundException("La catégorie demandée n'existe pas");
+        }
+
+        return $this->render('product/category.html.twig', [
+            'slug' => $slug,
+            'category' => $category,
+        ]);
+    }
+    /**
+     * @Route("/{category_slug}/{slug}", name="product_show")
+     */
+    public function show($slug, ProductRepository $productRepository): Response
+    {
+        $product = $productRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si le produit n'existe pas, alors il vas vers une erreur.
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit demandé n'exite pas");
+        }
+
+        return $this->render('product/show.html.twig', [
+            'product' => $product
+        ]);
+    }
+
+    /**
+     * @Route("/admin/product/create", name="product_create")
+     */
+    public function create(FormFactoryInterface $factory, Request $request, SluggerInterface $slugger, EntityManagerInterface $em): Response
+    {
+
+        $builder = $factory->createBuilder(FormType::class, null, [
+            'data_class' => Product::class
+        ]);
+
+        $builder->add('name', TextType::class, [
+            'label' => 'Nom du produit',
+            'attr' => ['placeholder' => 'taper le nom du produit']
+        ])
+            ->add('shortDescription', TextareaType::class, [
+                'label' => 'Description courte',
+                'attr' => [
+                    'placeholder' => 'Taper une description assez courte mais parlante pour le visiteur'
+                ]
+            ])
+            ->add('price', MoneyType::class, [
+                'label' => 'Prix du produit',
+                'attr' => [
+                    'placeholder' => 'taper le prix du produit en €'
+                ]
+            ])
+            ->add('mainPicture', UrlType::class, [
+                'label' => 'image du produit',
+                'attr' => ['placeholder' => 'Tapez une URL d\'image !']
+            ])
+            ->add('category', EntityType::class, [
+                'label' => 'catégorie',
+                'placeholder' => '-- Choisir une catégorie --',
+                'class' => Category::class,
+                //'choice_label' => 'name'
+                //choice_label peu aussi retourner un function.
+                'choice_label' => function (Category $category) {
+                    return strtoupper($category->getName());
+                }
+            ]);
+
+        $form = $builder->getForm();
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted()) {
+            $product = $form->getData();
+            $product->setSlug(strtolower($slugger->slug($product->getName())));
+            //persiter l'information
+            $em->persist($product);
+            $em->flush();
+
+            //dd($product);
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('product/create.html.twig', [
+            'formView' => $formView
+        ]);
+    }
+}
+
+👌 Créer une classe de formulaire
+Utilisation de la console form.
+
+php bin/console make:form ProductType
+
+The name of Entity or fully qualified model class name that the new form will be bound to (empty for none):
+ > Product
+
+ Creation de Form/ProductType.php
+
+ <?php
+
+namespace App\Form;
+
+use App\Entity\Product;
+use App\Entity\Category;
+use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Bridge\Doctrine\Form\Type\EntityType;
+use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Form\Extension\Core\Type\UrlType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
+use Symfony\Component\Form\Extension\Core\Type\MoneyType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
+
+class ProductType extends AbstractType
+{
+    public function buildForm(FormBuilderInterface $builder, array $options)
+    {
+        $builder
+            ->add('name', TextType::class, [
+                'label' => 'Nom du produit',
+                'attr' => ['placeholder' => 'taper le nom du produit']
+            ])
+            ->add('shortDescription', TextareaType::class, [
+                'label' => 'Description courte',
+                'attr' => [
+                    'placeholder' => 'Taper une description assez courte mais parlante pour le visiteur'
+                ]
+            ])
+            ->add('price', MoneyType::class, [
+                'label' => 'Prix du produit',
+                'attr' => [
+                    'placeholder' => 'taper le prix du produit en €'
+                ]
+            ])
+            ->add('mainPicture', UrlType::class, [
+                'label' => 'image du produit',
+                'attr' => ['placeholder' => 'Tapez une URL d\'image !']
+            ])
+            ->add('category', EntityType::class, [
+                'label' => 'catégorie',
+                'placeholder' => '-- Choisir une catégorie --',
+                'class' => Category::class,
+                //'choice_label' => 'name'
+                //choice_label peu aussi retourner un function.
+                'choice_label' => function (Category $category) {
+                    return strtoupper($category->getName());
+                }
+            ]);
+    }
+
+    public function configureOptions(OptionsResolver $resolver)
+    {
+        $resolver->setDefaults([
+            'data_class' => Product::class,
+        ]);
+    }
+}
+
+On deplace tout l'argumentation de Form créer sur ProductController.
+Mais dans le Controller.php nous changeons l'accés de $builder.
+ProductType.php
+	/**
+     * @Route("/admin/product/create", name="product_create")
+     */
+    public function create(FormFactoryInterface $factory, Request $request, SluggerInterface $slugger, EntityManagerInterface $em): Response
+    {
+
+        <h2>$builder = $factory->createBuilder(ProductType::class);</h2>
+
+        $form = $builder->getForm();
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted()) {
+            $product = $form->getData();
+            $product->setSlug(strtolower($slugger->slug($product->getName())));
+            //persiter l'information
+            $em->persist($product);
+            $em->flush();
+
+            //dd($product);
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('product/create.html.twig', [
+            'formView' => $formView
+        ]);
+    }
+
+Form : les raccourcis offerts par l'AbstractController
+
+ -Créer un formulaire de modification 
+
+ 	/**
+     * @Route("/admin/product/{id}/edit", name="product_edit")
+     */
+    public function edit($id, ProductRepository $productRepository, Request $request, EntityManagerInterface $em): Response
+    {
+        $product = $productRepository->find($id);
+        //Rappeler $product revient au même que $form->setData($product);
+        $form = $this->createForm(ProductType::class, $product);
+        // Permet de rappeler les information du product $id
+        //$form->setData($product);
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted()) {
+            $em->flush();
+
+            //dd($product);
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('product/edit.html.twig', [
+            'product' => $product,
+            'formView' => $formView
+        ]);
+    }
+
+    /**
+     * @Route("/admin/product/create", name="product_create")
+     */
+    public function create(FormFactoryInterface $factory, Request $request, SluggerInterface $slugger, EntityManagerInterface $em): Response
+    {
+        $product = new Product;
+
+        $builder = $factory->createBuilder(ProductType::class, $product);
+
+        $form = $builder->getForm();
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted()) {
+            $product->setSlug(strtolower($slugger->slug($product->getName())));
+            //persiter l'information
+            $em->persist($product);
+            $em->flush();
+
+            //dd($product);
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('product/create.html.twig', [
+            'formView' => $formView
+        ]);
+    }
+
+-Twig de edit.html.twig
+
+{% extends "base.html.twig" %}
+
+{% block title %}
+	Edition de
+	{{ product.name }}
+{% endblock %}
+
+{% block body %}
+	<h1>Editer le produit
+		{{ product.name }}</h1>
+
+	{{ form_start(formView) }}
+
+	{{ form_errors(formView) }}
+	<div class="row">
+		<div class="col">
+			{{ form_row(formView.name) }}
+			{{ form_row(formView.shortDescription) }}
+
+		</div>
+		<div class="col">
+			{{ form_row(formView.mainPicture) }}
+			{{ form_row(formView.category) }}
+			{{ form_row(formView.price) }}
+
+		</div>
+	</div>
+	<br>
+	<button type="submit" class="btn btn-primery">
+		<i class="fas fa-save"></i>
+		Créer le produit
+	</button>
+
+	{{ form_end(formView) }}
+{% endblock %}
+
+-Créer une Redirection après la soumission d'un formulaire
+
+	/**
+     * @Route("/admin/product/{id}/edit", name="product_edit")
+     */
+    public function edit($id, ProductRepository $productRepository, Request $request, EntityManagerInterface $em, UrlGeneratorInterface $urlGenerator): Response
+    {
+        $product = $productRepository->find($id);
+        //Rappeler $product revient au même que $form->setData($product);
+        $form = $this->createForm(ProductType::class, $product);
+        // Permet de rappeler les information du product $id
+        //$form->setData($product);
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted()) {
+            $em->flush();
+
+            //Creation d'une redirection aprés validation dans le detail.
+            $response = new Response();
+            $url = $urlGenerator->generate('product_show', [
+                'category_slug' => $product->getCategory()->getSlug(),
+                'slug' => $product->getSlug()
+            ]);
+            $response->headers->set('location', $url);
+            $response->setStatusCode(302);
+
+            return $response;
+        }
+-La redirection plus simplifier.
+    /**
+     * @Route("/admin/product/{id}/edit", name="product_edit")
+     */
+    public function edit($id, ProductRepository $productRepository, Request $request, EntityManagerInterface $em, UrlGeneratorInterface $urlGenerator): Response
+    {
+        $product = $productRepository->find($id);
+        //Rappeler $product revient au même que $form->setData($product);
+        $form = $this->createForm(ProductType::class, $product);
+        // Permet de rappeler les information du product $id
+        //$form->setData($product);
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted()) {
+            $em->flush();
+            //Creation d'une redirection aprés validation dans le detail.
+            $url = $urlGenerator->generate('product_show', [
+                'category_slug' => $product->getCategory()->getSlug(),
+                'slug' => $product->getSlug()
+            ]);
+
+            // $response = new RedirectResponse($url);
+            // return $response;
+            return $this->redirect($url);
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('product/edit.html.twig', [
+            'product' => $product,
+            'formView' => $formView
+        ]);
+    }
+	
+Mais peu s'ecrire aussi un raccourci encore plus rapide.
+
+	/**
+     * @Route("/admin/product/{id}/edit", name="product_edit")
+     */
+    public function edit($id, ProductRepository $productRepository, Request $request, EntityManagerInterface $em, UrlGeneratorInterface $urlGenerator): Response
+    {
+        $product = $productRepository->find($id);
+        //Rappeler $product revient au même que $form->setData($product);
+        $form = $this->createForm(ProductType::class, $product);
+        // Permet de rappeler les information du product $id
+        //$form->setData($product);
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted()) {
+            $em->flush();
+            //Creation d'une redirection aprés validation dans le detail.
+            return $this->redirectToRoute('product_show', [
+                'category_slug' => $product->getCategory()->getSlug(),
+                'slug' => $product->getSlug()
+            ]);
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('product/edit.html.twig', [
+            'product' => $product,
+            'formView' => $formView
+        ]);
+    }
+
+Exercice #01 : Créez un CategoryController avec deux Routes
+
+Créez une classe CategoryController avec deux méthodes.
+-php bin/console make:controller CategoryController
+
+Exigences :
+Une méthode routée sur /admin/category/create : elle doit juste afficher un fichier Twig avec un titre h1 avec le texte "Créer une catégorie"
+Une méthode routée sur /admin/category/{id}/edit : elle doit afficher un fichier Twig avec un titre h1 contenant le nom de la catégorie correspondant à l'id envoyé dans l'URL
+
+Exercice #02 : Créez le formulaire de création d'une catégorie
+ Créez une classe de formulaire (make:form) qui s'appellera CategoryType qui ne contiendra qu'un seul champ "name"
+
+Exigences :
+
+La route /admin/category/create doit afficher le formulaire
+On doit aussi gérer la soumission du formulaire avec enregistrement de la nouvelle catégorie dans la base de données !
+On doit enfin rediriger le visiteur vers la page d'accueil
