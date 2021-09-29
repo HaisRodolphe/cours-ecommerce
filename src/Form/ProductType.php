@@ -4,13 +4,18 @@ namespace App\Form;
 
 use App\Entity\Product;
 use App\Entity\Category;
+use Symfony\Component\Form\FormEvent;
+use Symfony\Component\Form\FormEvents;
 use Symfony\Component\Form\AbstractType;
+use App\Form\DataTransfomer\CentimesTransformer;
+use App\Form\Type\PriceType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Form\Extension\Core\Type\UrlType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\Extension\Core\Type\MoneyType;
+use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 
 class ProductType extends AbstractType
@@ -32,6 +37,13 @@ class ProductType extends AbstractType
                 'label' => 'Prix du produit',
                 'attr' => [
                     'placeholder' => 'taper le prix du produit en €'
+                ],
+                'divisor' => 100
+            ])
+            ->add('stock', NumberType::class, [
+                'label' => 'Quantité en stock',
+                'attr' => [
+                    'placeholder' => 'taper le nombre de produit en stock'
                 ]
             ])
             ->add('mainPicture', UrlType::class, [

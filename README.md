@@ -946,3 +946,209 @@ Exigences :
 La route /admin/category/create doit afficher le formulaire
 On doit aussi gérer la soumission du formulaire avec enregistrement de la nouvelle catégorie dans la base de données !
 On doit enfin rediriger le visiteur vers la page d'accueil
+
+-----------------------------------
+<h2>Aller plus loin avec le composant Form de Symfony (45 minutes)</h2>
+Documentation officielle de Symfony sur les événements d'un Formulaire : 
+https://symfony.com/doc/current/form/events.html
+Documentation officielle de Symfony pour débuter avec les forms : 
+https://symfony.com/doc/current/forms.html
+Documentation officielle de Symfony sur le composant symfony/form : 
+https://symfony.com/doc/current/components/form.html
+
+<h3>Réagir aux événements lancés par le formulaire</h3>
+
+<h3>Dans productType.php création d'un écouteur d'évenement</h3>
+
+$builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event) {
+    $form = $event->getForm();
+
+    /** @var Product */
+    $product = $event->getData();
+
+    if($product->getId() === null) {
+        $form->add('category', EntityType::class, [
+            'label' => 'catégorie',
+            'placeholder' => '-- Choisir une catégorie --',
+            'class' => Category::class,
+            //'choice_label' => 'name'
+            //choice_label peu aussi retourner un function.
+            'choice_label' => function (Category $category) {
+                return strtoupper($category->getName());
+            }
+        ])                                              
+    }
+});
+
+<h3>Transformer les données d'un formulaire grâce aux événements</h3>
+
+// Lors de l'injection le prix et convertie dans la table en centime € grace à POST_SUBMIT.    
+        $builder->addEventListener(FormEvents::POST_SUBMIT, function (FormEvent $event) {
+            $product = $event->getData();
+
+            if ($product->getPrice() !== null) {
+                $product->setPrice($product->getPrice() * 100);
+            }
+        });
+        //On prépare le prix et on le convertie en met en dizaine € sur le creation du produit
+        $builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event) {
+            $form = $event->getForm();
+
+            /** @var Product */
+            $product = $event->getData();
+
+            if ($product->getPrice() !== null) {
+                $product->setPrice($product->getPrice() / 100);
+            }
+
+            // if($product->getId() === null) {
+            //     $form->add('category', EntityType::class, [
+            //         'label' => 'catégorie',
+            //         'placeholder' => '-- Choisir une catégorie --',
+            //         'class' => Category::class,
+            //         //'choice_label' => 'name'
+            //         //choice_label peu aussi retourner un function.
+            //         'choice_label' => function (Category $category) {
+            //                 return strtoupper($category->getName());
+            //         }
+            //     ])                                              
+            // }
+        });
+    }
+
+<h3>Transformer des données avec un DataTransformer</h3>
+
+Documentation officielle de Symfony sur les DataTransformers : 
+https://symfony.com/doc/current/form/data_transformers.html
+
+$builder->get('price')->addModelTransformer(new CallbackTransformer(
+            //S'il y a  valeur elle sera convertie en dixaine € et afficher sur le formulaire.
+            function ($value) {
+                if ($value === null) {
+                    return;
+                }
+                return $value / 100;
+            },
+            //S'il y a une valeur elle sera convertie en centime € puis injecter dans la base de donnée.
+            function ($value) {
+                if ($value === null) {
+                    return;
+                }
+                return $value * 100;
+            }
+
+        ));
+
+DataTransformer : factoriser le code dans une classe !
+Creation dans Form un dossier DataTransformer puis un fichier CentimesTransformer.php une class.
+Pour intégréer la converstion de "price" dans les formulaires mais qui pourra étre employer,
+dans nimporte qu'elle formulaire ou on utilise "price". 
+
+<?php
+
+namespace App\Form\DataTransfomer;
+
+use Symfony\Component\Form\DataTransformerInterface;
+
+class CentimesTransformer implements DataTransformerInterface
+{
+
+    public function transform($value)
+    {
+        if (null === $value) {
+            return;
+        }
+
+        return $value / 100;
+    }
+
+    public function reverseTransform($value)
+    {
+        if (null === $value) {
+            return;
+        }
+        return $value * 100;
+    }
+}
+
+<p>Dans ProductType.php Nous pouvons utilisé "CentimesTransformer".
+Avec sa class dans n'importe quelle formulaire pour convertir le prix. 
+use App\Form\DataTransfomer\CentimesTransformer;
+$builder->get('price')->addModelTransformer(new CentimesTransformer);</p>
+
+Mais dans dans le chant MoneyType la convertion est déjà existant avec une option:
+'divisor' => 100
+
+->add('price', MoneyType::class, [
+    'label' => 'Prix du produit',
+    'attr' => [
+    'placeholder' => 'taper le prix du produit en €'
+    ],
+    'divisor' => 100
+])
+
+<h3>Créer notre propres types de champs !</h3>
+
+📖 Documentation officielle de Symfony - Créer ses propres types de champs : 
+https://symfony.com/doc/current/form/create_custom_field_type.html
+📖 Documentation officielle de Symfony sur les DataTransformers : 
+https://symfony.com/doc/current/form/data_transformers.html
+📖 Documentation officielle de Symfony sur les événements d'un Formulaire : 
+https://symfony.com/doc/current/form/events.html
+📖 Documentation officielle de Symfony pour débuter avec les forms : 
+https://symfony.com/doc/current/forms.html
+📖 Documentation officielle de Symfony sur le composant symfony/form : 
+https://symfony.com/doc/current/components/form.html
+
+Creation d'un dossier dans Form nommé Type dans le qu'elle je créer un fichier PriceType.php 
+Dans le quelle nous allons recréer la mecanique:
+
+namespace App\Form\Type;
+
+use App\Form\DataTransfomer\CentimesTransformer;
+use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\NumberType;
+use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\OptionsResolver\OptionsResolver;
+
+class PriceType extends AbstractType
+{
+
+    public function buildForm(FormBuilderInterface $builder, array $options)
+    {
+        //dd($options);
+        if ($options['divide'] === false) {
+            return;
+        }
+
+        $builder->addModelTransformer(new CentimesTransformer);
+    }
+
+    public function getParent()
+    {
+        return NumberType::class;
+    }
+
+    public function configureOptions(OptionsResolver $resolver)
+    {
+        $resolver->setDefaults([
+            'divide' => true
+        ]);
+    }
+}
+
+Il suffis de déclarer la class dans le controller ProductType.php.
+->add('price', PriceType::class, [
+    'label' => 'Prix du produit',
+    'attr' => [
+    'placeholder' => 'taper le prix du produit en €'
+    ],
+    'divisor' => true 
+])
+
+
+
+
+
+
+
