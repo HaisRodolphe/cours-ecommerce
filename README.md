@@ -1146,6 +1146,337 @@ Il suffis de déclarer la class dans le controller ProductType.php.
     'divisor' => true 
 ])
 
+------------------------------------
+
+<h2>Validation des données (1 heure et 5 minutes)</h2>
+
+<h3>Introduction à la validation des données avec Symfony</h3>
+composer req validator
+📖 Documentation officielle de Symfony sur la Validation : 
+https://symfony.com/doc/current/validation.html
+📖 Liste des contraintes de validation livrées par Symfony : 
+https://symfony.com/doc/current/reference/constraints.html 
+
+Validates PHP values against constraints.
+Symfony\Component\Validator\Validator\ValidatorInterface (debug.validator)
+
+<h3>Notions de base sur le composant Validator</h3>
+Permet de validé des données suivant certaine contrainte donnée par
+validator. Cette exemple permet de tester des données scalaire simple est plate.
+
+public function edit(ValidatorInterface $validator): Response
+    {
+        $age = 200;
+
+        $resultat = $validator->validate($age, [
+            new LessThanOrEqual([
+                'value' => 120,
+                'message' => "L'âge doit être inférieur à {{ compared_value }} mais vous avez donné {{ value }}"
+            ]),
+            new GreaterThan([
+                'value' => 0,
+                'message' => "L'âge doit être superieur à 0"
+            ])
+        ]);
+
+        if ($resultat->count() > 0) {
+            dd("Il y a des erreur", $resultat);
+        }
+        dd("Tout va bien");
+}
+Le validateur peu validée une chaine, un booléen, un nombre......    
+
+<h3>Validation de données complexes (tableaux)</h3>
+Dans cette exemple nous allons pouvoir controler un tableau assiociatif qui à de la profondeur.
+    public function edit(ValidatorInterface $validator): Response
+        $client = [
+            'nom' => 'Hais',
+            'prenom' => 'Rodolphe',
+            'voiture' => [
+                'marque' => 'Hyundai',
+                'couleur' => 'Noire'
+            ]
+        ];
+        //La collection de contrainte doit refleter les données de la variable dans sa structure.
+        $collection = new Collection([
+            // new NotBlank permet de dire que la donner ne doit pas être vide.
+            'nom' => new NotBlank(['message' => "Le nom ne doit pas être vide !"]),
+            'prenom' => [
+                new NotBlank(['message' => "Le prénon ne doit pas être vide"]),
+                //new Length 
+                new Length(['min' => 3, 'minMessage' => "Le prenom ne doit pas faire moins de 3 caractéres"])
+            ],
+            'voiture' => new Collection([
+                'marque' => new NotBlank(['message' => 'La marque de la voiture est obligatoire']),
+                'couleur' => new NotBlank(['message' => 'La couleur de la voiture est obligatoire'])
+            ])
+        ]);
+
+        $resultat = $validator->validate($client, $collection);
+
+        if ($resultat->count() > 0) {
+            dd("Il y a des erreur", $resultat);
+        }
+
+        dd("Tout va bien");
+    }    
+
+<h3>Validation d'objets grâce à YAML</h3>
+Pour faire une validation d'un objet grace à YAML.
+Il faut tout d'abord créer un dossier dans config qui pour l'exemple sera nommer validator puis un fichier
+product.yaml dans le quel nous allons créer la requette de validation au format YAML.
+App\Entity\Product:
+  properties:
+    name:
+      - NotBlank: { message: "Le nom du produit est obligatoire" }
+      - Length:
+          {
+            min: 3,
+            max: 255,
+            minMessage: "Le nom du produit doit faire plus de 3 caractéres",
+          }
+    price:
+      - NotBlank: { message: "Le prix du produit est obligatoire" }
+
+Puis pour la validation dans ProductController.php les paramétres suivant.
+public function edit($id, ProductRepository $productRepository, Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
+{
+    $product = new Product;
+
+        $resultat = $validator->validate($product);
+
+        if ($resultat->count() > 0) {
+            dd("Il y a des erreur", $resultat);
+        }
+
+        dd("Tout va bien");
+
+}
+
+<h3>Validation d'objets en PHP</h3>
+Mais elle n'est pas conseiller car elle reste statique.
+La validation peu se faire directement par l'entity exemple dans le Product.php.
+Symfony basculera directement dans l'entity pour appliquer la methode validator.
+
+
+public static function loadValidatorMetadata(ClassMetadata $metadata)
+    {
+        $metadata->addPropertyConstraints('name', [
+            new NotBlank(['message' => 'Le nom du produit est obligatoir']),
+            new Length(['min' => 3, 'max' => 255, 'minMessage' => 'Le nom du produit doit contenir au moin 3 caractères'])
+        ]);
+        $metadata->addPropertyConstraint('price', new NotBlank(['message' => 'Le prix du produit est obligatoir']));
+    }
+
+Puis pour la validation dans ProductController.php les paramétres suivant.
+public function edit($id, ProductRepository $productRepository, Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
+{
+    $product = new Product;
+
+        $resultat = $validator->validate($product);
+
+        if ($resultat->count() > 0) {
+            dd("Il y a des erreur", $resultat);
+        }
+
+        dd("Tout va bien");
+
+}
+
+<h3> Utiliser l'espace de noms Constraints (Assert) </h3>
+Pour reduire le nombre de use pour l'utilisation de différente méthode de validator, mais peu être utiliser
+pour d'autre méthode.
+Il suffit d'utiliser le as Assert à la fin du use.
+Avant nous appelions différent use.
+
+use Symfony\Component\Validator\Constraints\Length;
+use Symfony\Component\Validator\Constraints\NotBlank;
+
+Product.php
+public static function loadValidatorMetadata(ClassMetadata $metadata)
+    {
+        $metadata->addPropertyConstraints('name', [
+            new NotBlank(['message' => 'Le nom du produit est obligatoir']),
+            new Length(['min' => 3, 'max' => 255, 'minMessage' => 'Le nom du produit doit contenir au moin 3 caractères'])
+        ]);
+        $metadata->addPropertyConstraint('price', new NotBlank(['message' => 'Le prix du produit est obligatoir']));
+    }
+
+Maintenant nous pouvont en utilisé qu'un seul. Grace à l'alias Assert.
+use Symfony\Component\Validator\Constraints as Assert;
+Mais il faut absolument utilisé l'extention Assert\ pour pouvoir que les functions soit reconnue. 
+public static function loadValidatorMetadata(ClassMetadata $metadata)
+    {
+        $metadata->addPropertyConstraints('name', [
+            new Assert\NotBlank(['message' => 'Le nom du produit est obligatoir']),
+            new Assert\Length(['min' => 3, 'max' => 255, 'minMessage' => 'Le nom du produit doit contenir au moin 3 caractères'])
+        ]);
+        $metadata->addPropertyConstraint('price', new Assert\NotBlank(['message' => 'Le prix du produit est obligatoir']));
+    }
+
+<h3>Validation d'objets grâce aux annotations</h3>
+Cette méthode est conseiller est la norme dans symfony.
+Les function de validation sont inscrite directement dans les annotations.
+    /**
+     * @ORM\Column(type="string", length=255)
+     * @Assert\NotBlank(message="Le nom du produit est obligatoire !")
+     * @Assert\Length(min=3, max=255, minMessage="Le nom du produit doit avoir au moin 3 caractères")
+     */
+    private $name;
+
+    /**
+     * @ORM\Column(type="integer")
+     * @Assert\NotBlank(message="Le prix du produit est obligatoire !")
+     */
+    private $price;
+
+Puis pour la validation dans ProductController.php les paramétres suivant.    
+public function edit($id, ProductRepository $productRepository, Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
+{
+    $product = new Product;
+
+        $resultat = $validator->validate($product);
+
+        if ($resultat->count() > 0) {
+            dd("Il y a des erreur", $resultat);
+        }
+
+        dd("Tout va bien");
+
+}
+
+<h3>Validation d'un formulaire</h3>
+
+Nous pouvons aussi faire la validation directement dans le formulaire.
+Dans ProductType.php de form. 
+exemple:
+
+->add('name', TextType::class, [
+                'label' => 'Nom du produit',
+                'attr' => ['placeholder' => 'taper le nom du produit'],
+                'required' => false, //nous devont desactiver le required
+                'constraints' => new NotBlank(['message' => "Validation du formulaire : le nom du produit ne peut pas être vide !"]),
+
+            ])
+
+Mais dans l'entity Product.php.
+Mettre un point d'interogation pour ne plus prendre en compte le setName.
+Desactivé le contrôle par symfony.
+public function setName(?string $name): self
+    {
+        $this->name = $name;
+
+        return $this;
+    }
+
+idem pour le price.
+
+->add('price', MoneyType::class, [
+                'label' => 'Prix du produit',
+                'attr' => [
+                    'placeholder' => 'taper le prix du produit en €'
+                ],
+                'divisor' => 100,
+                'required' => false,
+                'constraints' => new NotBlank(['message' => 'Le prix du produit est obligatoire'])
+            ])
+
+Mais dans l'entity Product.php.
+Mettre un point d'interogation pour ne plus prendre en compte le setPrice.
+Desactivé le contrôle par symfony.
+public function setPrice(?int $price): self
+    {
+        $this->price = $price;
+
+        return $this;
+    }
+
+<h3>Les groupes de validation</h3>
+📖 Documentation officielle de Symfony sur les groupes de validation : 
+https://symfony.com/doc/current/validation/groups.html
+Dans ProductController.php
+/**
+     * @Route("/admin/product/{id}/edit", name="product_edit")
+     */
+    public function edit($id, ProductRepository $productRepository, Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
+    {
+        $product = new Product;
+
+        $resultat = $validator->validate($product);
+
+        dd($resultat);
+
+dans entity Product.php
+Sur cette exemple nous déclarons un groupe dans l'annotation groups={"with-price"}.
+
+     * @ORM\Column(type="integer")
+     * @Assert\NotBlank(message="Le prix du produit est obligatoire !", groups={"with-price"})
+     */
+    private $price;
+
+Quand ont fait le teste, nous n'aurons pas l'erreur sur le price que sur ne name.
+Pour que le groupe soit pris en compte il faut le déclarer dans le ProductController.php
+Mais in ne reconnaitra que with-price
+
+ public function edit($id, ProductRepository $productRepository, Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
+    {
+        $product = new Product;
+
+        $resultat = $validator->validate($product, null, ["with-price"]);
+
+        dd($resultat);
+
+Pour faire reconnaitre les validations qui n'ont pas de groupe il faut utilisé Default.
+
+$resultat = $validator->validate($product, null, ["Default", "with-price"]);
+
+Comment sa se passe sur un formulaire ProductController.php.
+
+/**
+     * @Route("/admin/product/{id}/edit", name="product_edit")
+     */
+    public function edit($id, ProductRepository $productRepository, Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
+    {
+
+        $product = $productRepository->find($id);
+        //Rappeler $product revient au même que $form->setData($product);
+        $form = $this->createForm(ProductType::class, $product, [
+            "validation_groups" => "with-price"
+        ]);
+
+Quand on valide la page il n'y aura que le prix qui sera pris en compte.
+Pour que tout soit pris en compte nous devons créer un tableau "validation_groups" => ["Default", "with-price"]
+
+    $product = $productRepository->find($id);
+            //Rappeler $product revient au même que $form->setData($product);
+            $form = $this->createForm(ProductType::class, $product, [
+                "validation_groups" => ["Default", "with-price"]
+            ]);
+
+Mais on n'as la possibilité de créer dans l'annotation une une autre validation.
+Dans entity Product.php
+    /**
+     * @ORM\Column(type="string", length=255)
+     * @Assert\NotBlank(message="Le nom du produit est obligatoire !")
+     * @Assert\Length(min=3, max=255, minMessage="Le nom du produit doit avoir au moin 3 caractères")
+     * @Asset\Length(min=10, minMessage="Le nom du produit doit faire au moins 10 caractères", groups={"large=name"})
+     */
+    private $name;
+
+Donc aprés si je veux large-name en validation dans le form:
+Sur un formulaire ProductController.php.
+    $product = $productRepository->find($id);
+        //Rappeler $product revient au même que $form->setData($product);
+        $form = $this->createForm(ProductType::class, $product, [
+            "validation_groups" => ["large-name", "with-price"]
+        ]);
+
+Ont n'a la possibilité de créer de goupe de validation dans les annotations et le validateur ne prendra en compte
+que les validations des groupe déclarée.
+
+<h3>Finitions et versionning avec Git</h3>
+Finition des validation dans entity Product.php sur la validation du formulaire
+
 
 
 
