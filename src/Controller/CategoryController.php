@@ -12,15 +12,33 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\String\Slugger\SluggerInterface;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 
 class CategoryController extends AbstractController
 {
+    protected $categoryRepository;
+
+    public function __construct(CategoryRepository $categoryRepository)
+    {
+        $this->categoryRepository = $categoryRepository;
+    }
+
+    public function renderMenuList()
+    {
+        //1. Aller chercher les catégories dans la base de données (repository)
+        $categories = $this->categoryRepository->findAll();
+        //2. Renvoyer le menu HTML sous la forme d'une Response ($this->render)
+        return $this->render('category/_menu.html.twig', [
+            'categories' => $categories
+
+        ]);
+    }
     /**
      * @Route("/admin/category/create", name="category_create")
      */
-    public function create(Request $request, EntityManagerInterface $em, SluggerInterface $slugger): Response
+    public function create(Request $request, EntityManagerInterface $em, SluggerInterface $slugger, ValidatorInterface $validator): Response
     {
         $category = new Category;
 
@@ -28,7 +46,7 @@ class CategoryController extends AbstractController
 
         $form->handleRequest($request);
 
-        if ($form->isSubmitted()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $category->setSlug(strtolower($slugger->slug($category->getName())));
 
             $em->persist($category);
@@ -48,7 +66,7 @@ class CategoryController extends AbstractController
     /**
      * @Route("/admin/category/{id}/edit", name="category_edit")
      */
-    public function edit($id, CategoryRepository $categoryRepository, Request $request, EntityManagerInterface $em): Response
+    public function edit($id, CategoryRepository $categoryRepository, Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
     {
 
         $category = $categoryRepository->find($id);
@@ -57,7 +75,7 @@ class CategoryController extends AbstractController
 
         $form->handleRequest($request);
 
-        if ($form->isSubmitted()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em->flush();
 
             return $this->redirectToRoute('homepage');

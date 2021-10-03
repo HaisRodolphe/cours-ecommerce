@@ -1347,7 +1347,7 @@ public function edit($id, ProductRepository $productRepository, Request $request
 
 <h3>Validation d'un formulaire</h3>
 
-Nous pouvons aussi faire la validation directement dans le formulaire.
+Nous pouvons aussi faire la validation directement dans le formulaire. Grace à l'objet Validator
 Dans ProductType.php de form. 
 exemple:
 
@@ -1477,7 +1477,214 @@ que les validations des groupe déclarée.
 <h3>Finitions et versionning avec Git</h3>
 Finition des validation dans entity Product.php sur la validation du formulaire
 
+<h3>Exercice : validez les catégories !</h3>
 
+Mettez en place des validations sur l'entité Category afin que le formulaire soit validé.
+
+Exigences :
+Le champ name ne doit pas être vide
+Le champ name ne doit pas contenir moins de 3 caractères
+
+Dans entity Category.php sur le name nous devond déclarer les message de validation.
+    Ne pas oublier le use.
+    use Symfony\Component\Validator\Constraints as Assert;
+
+    /**
+     * @ORM\Column(type="string", length=255)
+     * @Assert\NotBlank(message="Le nom du produit est obligatoire !")
+     * @Assert\Length(min=3, max=255, minMessage="Le nom du produit doit avoir au moin 3 caractères")
+     */
+    private $name;
+
+    Mettre ne intérogation le setName pour qu'il ne soit plus pris en compte par symfony.   
+    public function setName(?string $name): self
+    {
+        $this->name = $name;
+
+        return $this;
+    }
+
+Dans CategoryType.php il est impératif de desactivé le controle du required.
+
+            $builder->add('name', TextType::class, [
+                'label' => 'Nom de la category',
+                'attr' => ['placeholder' => 'taper le nom du produit'],
+                'required' => false,
+            ]);
+
+Dans CathegoryController.php il faut déclarer le validator, ValidatorInterface $validator.
+Surtout il faut qu'il soit valide avant de le sauvegarder if ($form->isSubmitted() && $form->isValid())          
+Ne pas oublier le use.
+    use Symfony\Component\Validator\Constraints as Assert;
+
+    /**
+     * @Route("/admin/category/{id}/edit", name="category_edit")
+     */
+    public function edit($id, CategoryRepository $categoryRepository, Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
+    {
+
+        $category = $categoryRepository->find($id);
+
+        $form = $this->createform(CategoryType::class, $category);
+
+        $form->handleRequest($request);
+        
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+
+            return $this->redirectToRoute('homepage');
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('category/edit.html.twig', [
+            'category' => $category,
+            'formView' => $formView
+        ]);
+    }
+
+Astuce :
+Votre formulaire HTML ne vous laissera pas soumettre avec un champ vide car le champ possède un attribut "required", servez vous de l'inspecteur du navigateur pour supprimer cet attribut afin de faire vos tests !
+
+<h2>Renforcement Twig : Mise en place de la navbar (16 minutes)</h2>
+
+
+<h3>Mise en place de la navbar : Introduction</h3>
+Dans le dossier template, shared sur le ficher _navbar.html.twig.
+
+<a class="navbar-brand" href="/">SymShop</a>
+
+<h3>Twig : appeler un controller directement depuis un template</h3>
+📖 Documentation officielle de Symfony : appeler un controller directement depuis Twig (déprécié) :
+ https://symfony.com/doc/4.1/templating/embedding_controllers.html
+🤔 Baptiste Donaux : Twig render controller, le faux bon ami : 
+https://www.baptiste-donaux.fr/twig-render-controller-le-faux-bon-ami/
+Dans le CategoryController.php il faut créer une fonction qui permetera d'appeler les catétogories
+que l'on passe sur la variable categories et qui passera par category/_menu.html.twig.
+
+protected $categoryRepository;
+
+    public function __construct(CategoryRepository $categoryRepository)
+    {
+        $this->categoryRepository = $categoryRepository;
+    }
+
+    public function renderMenuList()
+    {
+        //1. Aller chercher les catégories dans la base de données (repository)
+        $categories = $this->categoryRepository->findAll();
+        //2. Renvoyer le menu HTML sous la forme d'une Response ($this->render)
+        return $this->render('category/_menu.html.twig', [
+            'categories' => $categories
+
+        ]);
+    }
+
+Après il faut créer un fichier partial dans le dossier category/_menu.html.twig.
+On vas créer une boucle for du li
+{% for c in categories %}
+	<li class="nav-item">
+		<a class="nav-link" href="#">{{ c.name }}</a>
+	</li>
+{% endfor %}
+
+Dans le fichier _navbar.html.twig
+
+Je remplace tout les li par:
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+	<div class="container-fluid">
+		<a class="navbar-brand" href="/">SymShop</a>
+		<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarColor03" aria-controls="navbarColor03" aria-expanded="false" aria-label="Toggle navigation">
+			<span class="navbar-toggler-icon"></span>
+		</button>
+
+		<div class="collapse navbar-collapse" id="navbarColor03">
+			<ul class="navbar-nav me-auto">
+				{{ render(controller('App\\Controller\\CategoryController::renderMenulist')) }}
+
+			</ul>
+			<form class="d-flex">
+				<input class="form-control me-sm-2" type="text" placeholder="Search">
+				<button class="btn btn-secondary my-2 my-sm-0" type="submit">Search</button>
+			</form>
+		</div>
+	</div>
+</nav>
+
+Maintenant on peu voir toutes les catégories sur la bar de menu.
+
+<h3>Twig : Injecter une variable globale dans nos templates</h3>
+
+Seconde méthode
+📖 Documentation officielle de Symfony - Injecter des globales dans Twig : 
+https://symfony.com/doc/current/templating/global_variables.html
+
+Nous allons dans le dosssier config, packages dans le fichier twig.yaml.
+Une ligne globals: dans le quelle nous allons appeler la categoryRepository
+twig:
+    default_path: "%kernel.project_dir%/templates"
+    form_themes:
+        - bootstrap_4_layout.html.twig
+    globals:
+        categoryRepository: "@App\\Repository\\categoryRepository"
+
+Aprés il suffi d'appeler dans la _navbar.html.twig.
+La categoryRepository.findAll() pour pouvoir afficher tout les cathégories
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+	<div class="container-fluid">
+		<a class="navbar-brand" href="/">SymShop</a>
+		<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarColor03" aria-controls="navbarColor03" aria-expanded="false" aria-label="Toggle navigation">
+			<span class="navbar-toggler-icon"></span>
+		</button>
+
+		<div class="collapse navbar-collapse" id="navbarColor03">
+			<ul class="navbar-nav me-auto">
+				{% for c in categoryRepository.findAll() %}
+					<li class="nav-item">
+						<a class="nav-link" href="#">{{ c.name }}</a>
+					</li>
+				{% endfor %}
+			</ul>
+			<form class="d-flex">
+				<input class="form-control me-sm-2" type="text" placeholder="Search">
+				<button class="btn btn-secondary my-2 my-sm-0" type="submit">Search</button>
+			</form>
+		</div>
+	</div>
+</nav>
+
+<h3>Mettre en place les liens utilisateurs dans la navbar</h3>
+Creation des boutons Inscription, Login et Logout.
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+	<div class="container-fluid">
+		<a class="navbar-brand" href="/">SymShop</a>
+		<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarColor03" aria-controls="navbarColor03" aria-expanded="false" aria-label="Toggle navigation">
+			<span class="navbar-toggler-icon"></span>
+		</button>
+
+		<div class="collapse navbar-collapse" id="navbarColor03">
+			<ul class="navbar-nav me-auto">
+				{% for c in categoryRepository.findAll() %}
+					<li class="nav-item">
+						<a class="nav-link" href="#">{{ c.name }}</a>
+					</li>
+				{% endfor %}
+			</ul>
+			<ul class="navbar-nav">
+				<li class="nav-item">
+					<a href="#" class="nav-link">Inscription</a>
+				</li>
+				<li class="nav-item">
+					<a href="#" class="btn btn-sucess">Login</a>
+				</li>
+				<li class="nav-item">
+					<a href="#" class="btn btn-danger">Logout</a>
+				</li>
+
+			</ul>
+		</div>
+	</div>
+</nav>
 
 
 
