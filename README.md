@@ -1626,10 +1626,10 @@ twig:
     form_themes:
         - bootstrap_4_layout.html.twig
     globals:
-        categoryRepository: "@App\\Repository\\categoryRepository"
+        categoryRepository: "@App\\Repository\\CategoryRepository"
 
 Aprés il suffi d'appeler dans la _navbar.html.twig.
-La categoryRepository.findAll() pour pouvoir afficher tout les cathégories
+La variable categoryRepository.findAll() pour pouvoir afficher tout les cathégories:
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
 	<div class="container-fluid">
 		<a class="navbar-brand" href="/">SymShop</a>
@@ -1685,6 +1685,986 @@ Creation des boutons Inscription, Login et Logout.
 		</div>
 	</div>
 </nav>
+
+<h2>La sécurité : authentification (1 heure et 40 minutes)</h2>
+📖 Documentation officielle sur le composant Security : 
+https://symfony.com/doc/current/security.html
+
+<h3>📖 Introduction à la sécurité dans Symfony</h3>
+La sécuritée se pose en deux questions différentes...
+
+1-Authentification
+Es-tu vraiment celui que tu prétends être ?
+
+2-Autorisations
+As-tu le droit de faire ce que tu veux faire ?
+A tu le droit d'asceder à cette page, de voir ce bouton, de modifier tel produis.
+
+Donc voila pourquoi il y a le composant security, symfony/security.
+
+<h3>📖 Firewalls : des régions politiques dans nos applications</h3>
+
+Le composant sécuritée est comme la géographie.
+La sécuritée et gérer dans différent espace appeler, Les Firewalls!, chaque espace pourra avoir son autentification.
+Comprendre les firewalls.Les URLs formeent les frontiéres de vos régions (firewalls).
+On pourrait déffinir plusieur zone exemple:
+-Zone 1: (Firewall "admin" URLs:^/admin) Formulaire de login
+-Zone 2: (Firewall "api" URLs:^/api) Clé d'API
+-Le reste des zones: (Firewall "main" URLs:toutes les autres) Formulaire de login
+
+<h3>Installation du composant Security</h3>
+Installation du composant sécurity:
+-composer req security
+
+Installation d'un nouveau bunddel config/packages/security.yaml
+Symfony\Bundle\SecurityBundle\SecurityBundle::class => ['all' => true]
+Avec la creation d'un nouveau fichier security.yaml dans lequel on retrouve le Firewalls
+firewalls:
+        // La mise en place des différentes regions.
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+        main:
+            anonymous: true
+            lazy: true
+            provider: users_in_memory
+
+Ainsi que de nouveau service lier au composant de sécurité.
+
+Autowirable Types
+=================
+
+ The following classes & interfaces can be used as type-hints when autowiring:
+ (only showing classes/interfaces matching security)
+
+ Psr\Log\LoggerInterface $securityLogger (monolog.logger.security)
+
+ AuthenticationManagerInterface is the interface for authentication managers, which process Token authentication.
+ Symfony\Component\Security\Core\Authentication\AuthenticationManagerInterface (security.authentication.manager)
+
+ The TokenStorageInterface.
+ Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface (security.token_storage)
+
+ AccessDecisionManagerInterface makes authorization decisions.
+ Symfony\Component\Security\Core\Authorization\AccessDecisionManagerInterface (debug.security.access.decision_manager)
+
+ The AuthorizationCheckerInterface.
+ Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface (security.authorization_checker)
+
+ EncoderFactoryInterface to support different encoders for different accounts.
+ Symfony\Component\Security\Core\Encoder\EncoderFactoryInterface (security.encoder_factory.generic)
+
+ UserPasswordEncoderInterface is the interface for the password encoder service.
+ Symfony\Component\Security\Core\Encoder\UserPasswordEncoderInterface (security.user_password_encoder.generic)
+
+ RoleHierarchyInterface is the interface for a role hierarchy.
+ Symfony\Component\Security\Core\Role\RoleHierarchyInterface (security.role_hierarchy)
+
+Ce service sera le plus utiliser pendant la formation.
+ Helper class for commonly-needed security tasks.
+ Symfony\Component\Security\Core\Security (security.helper)
+
+ Implement to throw AccountStatusException during the authentication process.
+ Symfony\Component\Security\Core\User\UserCheckerInterface (security.user_checker)
+
+ Represents a class that loads UserInterface objects from some source for the authentication system.
+ Symfony\Component\Security\Core\User\UserProviderInterface (security.user.provider.concrete.users_in_memory)
+
+ Manages CSRF tokens.
+ Symfony\Component\Security\Csrf\CsrfTokenManagerInterface (security.csrf.token_manager)
+
+ Generates CSRF tokens.
+ Symfony\Component\Security\Csrf\TokenGenerator\TokenGeneratorInterface (security.csrf.token_generator)
+
+ Stores CSRF tokens.
+ Symfony\Component\Security\Csrf\TokenStorage\TokenStorageInterface (security.csrf.token_storage)
+
+ A utility class that does much of the *work* during the guard authentication process.
+ Symfony\Component\Security\Guard\GuardAuthenticatorHandler (security.authentication.guard_handler)
+
+ Extracts Security Errors from Request.
+ Symfony\Component\Security\Http\Authentication\AuthenticationUtils (security.authentication_utils)
+
+ Firewall uses a FirewallMap to register security listeners for the given request.
+ Symfony\Component\Security\Http\Firewall (debug.security.firewall)
+
+ Encapsulates the logic needed to create sub-requests, redirect the user, and match URLs.
+ Symfony\Component\Security\Http\HttpUtils (security.http_utils)
+
+ SessionAuthenticationStrategyInterface.
+ Symfony\Component\Security\Http\Session\SessionAuthenticationStrategyInterface (security.authentication.session_strategy)
+
+<h3>L'entité User pour représenter nos utilisateurs</h3>
+
+Nous allons créer une classe USER.
+
+php bin/console make:user User
+Nous pouvons utilisé d'autre source de base de donner mais nous utiliserons Doctrine.
+ Do you want to store user data in the database (via Doctrine)? (yes/no) [yes]:
+ >
+Quelle sera l'identifians de connection, par le quelle la personne sera reconnue.
+ Enter a property name that will be the unique "display" name for the user (e.g. email, username, uuid) [email]:
+ >
+Nous pouvons avoir differente autentification, clef d'appi, ip, nom d'utilisateur.
+ Will this app need to hash/check user passwords? Choose No if passwords are not needed or will be checked/hashed by some other system (e.g. a single sign-on server).
+cela à créer 
+
+created: src/Entity/User.php
+ created: src/Repository/UserRepository.php
+ updated: src/Entity/User.php
+ updated: config/packages/security.yaml
+ Does this app need to hash/check user passwords? (yes/no) [yes]:
+
+Dans le fichier security.yaml 
+#// l'encodeur utilise un algorithme pour hasher les mots de passe
+des utilisateurs
+encoders:
+        App\Entity\User:
+            algorithm: //auto qui s'adapte suivant la machine
+
+    # https://symfony.com/doc/current/security.html#where-do-users-come-from-user-providers
+    providers:
+        # used to reload user from session & other features (e.g. switch_user)
+
+        #//Les providers indiquent au composant Security où se trouve les données des utilisateur
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: email
+
+            //#Les firewalls sont les "regions" de votre application dont les frontiéres sont
+            matérialisées par des URLs
+            firewalls:
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+            #// il a été céer le main
+        main:
+            anonymous: true
+            lazy: true
+            provider: app_user_provider
+
+Il y a eu la creation de l'entity User.php
+
+class User implements UserInterface
+{
+    /**
+     * @ORM\Id
+     * @ORM\GeneratedValue
+     * @ORM\Column(type="integer")
+     */
+    private $id;
+
+    /**
+     * @ORM\Column(type="string", length=180, unique=true)
+     */
+    private $email;
+
+    /**
+     * @ORM\Column(type="json")
+     */
+    private $roles = [];
+    //Les rôles permettront de gérer les Autorisation (as-tu le dorit de faire ceci ou cela ?)
+    //Permet de donner des roles a l'utilisateur
+
+    /**
+     * @var string The hashed password
+     * @ORM\Column(type="string")
+     */
+    private $password;
+
+    /**
+     * @see UserInterface
+     */
+    public function getRoles(): array
+    {
+        $roles = $this->roles;
+        // guarantee every user at least has ROLE_USER
+        $roles[] = 'ROLE_USER';
+        //Le ROLE_USER représente le rôle que tous les utilisateurs possédent.
+        //Tout les utilisateurs auront le ROLR_USER
+
+
+<h3>Mise à jour des fixtures</h3>
+
+Creation de la fixtures User dans le dossier src/DataFixture dans le fichier AppFixtures.
+$admin = new User;
+
+        use App\Entity\User;
+
+        Creation du User avec le ROLE_ADMIN
+        $admin->setEmail("admin@gmail.com")
+            ->setPassword("passeword")
+            ->setFullName("Admin")
+            ->setRoles(['ROLE_ADMIN']);
+
+        $manager->persist($admin);
+
+        //Boucle for si $u = 0 et si $u < 5 alors tu fais $u++
+        for ($u = 0; $u < 5; $u++) {
+            $user = new User();
+            $user->setEmail("user$u@gmail.com")
+                ->setFullName($faker->name())
+                ->setPassword("passeword");
+            Donc il va persister 5 nouveau utlisateur.
+            $manager->persist($user);
+
+
+Migration de la fixture:
+-php bin/console d:f:l --no-interaction
+
+
+<h3>Hasher les mots de passes pour plus de sécurité</h3>
+
+Encodage des mots de passes.
+Faire un autowiring pour savoir si il y a un service qui gére les passwords.
+php bin/console debug:autowiring password
+
+Autowirable Types
+=================
+
+ The following classes & interfaces can be used as type-hints when autowiring:
+ (only showing classes/interfaces matching password)
+Creation de $encoder avec l'utilisation du UserPasswordEncoderInterface $encoder dans le dossier src/DataFixture 
+dans le fichier AppFixtures puis la mise en place de $hash et de l'appel de hash dans ->setPassword($hash).
+ UserPasswordEncoderInterface is the interface for the password encoder service.
+ Symfony\Component\Security\Core\Encoder\UserPasswordEncoderInterface (security.user_password_encoder.generic)
+
+class AppFixtures extends Fixture
+{
+    protected $slugger;
+    protected $encoder;
+
+    public function __construct(SluggerInterface $slugger, UserPasswordEncoderInterface $encoder)
+    {
+        $this->slugger = $slugger;
+     ** $this->encoder = $encoder;
+    }
+    public function load(ObjectManager $manager)
+    {
+
+        //Appel de faker objet
+        $faker = Factory::create('fr_FR');
+        $faker->addProvider(new \Liior\Faker\Prices($faker));
+        $faker->addProvider(new \Bezhanov\Faker\Provider\Commerce($faker));
+        $faker->addProvider(new \Bluemmb\Faker\PicsumPhotosProvider($faker));
+
+        $admin = new User;
+
+        $hash = $this->encoder->encodePassword($admin, "passeword");
+
+        $admin->setEmail("admin@gmail.com")
+            ->setPassword($hash)
+            ->setFullName("Admin")
+            ->setRoles(['ROLE_ADMIN']);
+
+        $manager->persist($admin);
+        //Boucle for si $u = 0 et si $u < 5 alors tu fais $u++
+        for ($u = 0; $u < 5; $u++) {
+            $user = new User();
+
+            $hash = $this->encoder->encodePassword($user, "passeword");
+
+            $user->setEmail("user$u@gmail.com")
+                ->setFullName($faker->name())
+                ->setPassword($hash);
+
+            $manager->persist($user);
+        }
+
+<h3>📖 Introduction aux Authenticator de Symfony</h3>
+
+Nous allons devoir créer des classes dont la mission est d'authentifier les 
+utilisateurs quand ils le demandent !
+
+Symfony vas pour se connecté avec plusieur autentifivateur.
+Chaque requéte sera vérifier pour savoir si l'utilisateur à le droit de faire ou de 
+ne pas faire sur et de se connecter sur chaque chose sur symfony.
+Si il la le droit de remplir le formulaire de login.
+L'autentificateur vas analiser soit l'autentification à réussit soit elle a ratée.
+
+1-Quelle est votre identité ?
+Votre identifiant ou votre email.
+2-Est-ce que vous existez au moin ?
+Est vous existez dans la base de donnée avec cette email. 
+3-Et le mot de passe ? C'est le même ?!
+
+Si les trois étapes se passe bien "Authentification réussit !"
+Cette authentification reste active le tout le temp de la connection.
+Sinon ont arrive à la failure, "Authentification ratée !"
+
+<h3>La commande make:auth</h3>
+
+La commande make:auth
+php bin/console make:auth
+
+ What style of authentication do you want? [Empty authenticator]:
+  [0] Empty authenticator
+  [1] Login form authenticator
+ > 0
+0
+
+ The class name of the authenticator to create (e.g. AppCustomAuthenticator):
+ > LoginFormAuthenticator
+
+ created: src/Security/LoginFormAuthenticator.php
+ updated: config/packages/security.yaml
+Création de guard:
+guard:
+    authenticators:
+        - App\Security\LoginFormAuthenticator
+        - 
+Les authenticators seront appelés à chaque requête HTTP par Symfony pour éventuellement procéder
+ à une authentification
+
+Creation de src/Security/LoginFormAuthenticator.php
+Il y a déjà les méthodes prés remplie dans le fichier qu'il restera à remplir.
+
+<h3> Page de login et problèmes de routage</h3>
+
+php bin/console make:controller SecurityController
+
+ created: src/Controller/SecurityController.php
+ created: templates/security/index.html.twig
+
+Pour voir toute les routes déjà créer on utilise la commande:
+php bin/console debug:router
+
+Il y a un conflit avec le slug de CategoryController.php.
+
+Il detecte cette route et nous emméne vers un message d'erreur
+"La catégorie demandée n'existe pas"
+
+<h3>Jouer avec les priorités des routes</h3>
+
+📖 Documentation officielle sur la priorité des routes : 
+https://symfony.com/doc/current/routing.html#priority-parameter
+
+Pour éviter le probléme de route il faut donner une prioritée à chaque route.
+Par défaut elles sont a 0.
+Donc dans le src/Controller/ProductController.php nous allons priorisé la route login.
+**
+* @Route("/{slug}", name="product_category")
+*/
+public function category($slug, CategoryRepository $categoryRepository): Response
+    {
+
+        $category = $categoryRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si la cathegory n'existe pas alors, il vas vers une erreur.
+        if (!$category) {
+            throw $this->createNotFoundException("La catégorie demandée n'existe pas");
+        }
+
+        return $this->render('product/category.html.twig', [
+            'slug' => $slug,
+            'category' => $category,
+        ]);
+    }
+
+Pour suprimer le cache:
+php bin/console cache:clear
+
+Mais l'ideal est de priorisé /{slug} en negatif pour évitée de priorisé plusieur route.
+ProductController.php
+
+**
+* @Route("/{slug}", name="product_category", priority=-1)
+*/
+
+<h3>Formulaire de connexion (login)</h3>
+
+📖 Documentation officielle sur le composant Security : 
+https://symfony.com/doc/current/security.html 
+php bin/console make:form LoginType 
+ // Aucune association
+ The name of Entity or fully qualified model class name that the new form will be bound to (empty for none):
+ >
+
+ created: src/Form/LoginType.php
+Mise en place du formulaire.
+
+class LoginType extends AbstractType
+{
+    public function buildForm(FormBuilderInterface $builder, array $options)
+    {
+        $builder
+            ->add('email', EmailType::class, [
+                'label' => 'Adresse email',
+                'attr' => [
+                    'placeholder' => 'Adresse email de connection'
+                ]
+            ])
+
+            ->add('password', PasswordType::class, [
+                'label' => 'Mot de passe',
+                'attr' => [
+                    'placeholder' => 'Mot de passe ...'
+                ]
+            ]);
+    }
+
+Dans le SecurityController.php il faut passé le formulaire.
+
+class SecurityController extends AbstractController
+{
+    /**
+     * @Route("/login", name="security_login")
+     */
+    public function login(): Response
+    {
+        $form = $this->createForm(LoginType::class);
+
+        return $this->render('security/login.html.twig', [
+            'formView' => $form->createView()
+        ]);
+    }
+}
+
+Mise en place du formulaire sur LoginType.php.
+
+{% extends 'base.html.twig' %}
+
+{% block title %}Connection !
+{% endblock %}
+
+{% block body %}
+	<h1>Connection</h1>
+	{{ form_start( formView ) }}
+
+	{{ form_widget( formView ) }}
+
+	<button type="submit" class="btn btn-success">Connection</button>
+
+	{{ form_end( formView ) }}
+{% endblock %}
+
+<h3>Authenticator : la méthode supports()</h3>
+
+Dans LoginFormAuthenticator.php nous allons créer le doignet.
+En testent avec un dd($request) on se rend compte que "_route" => "security_login" 
+et appeler sur tout les routes.
+
+public function supports(Request $request)
+    {
+        return $request->attributes->get('_route') === 'security_login'
+            && $request->isMethod('POST');
+    }
+Je n'interviens que si la request posséde dans ces attribus qui s'appel _route et qui égale à
+security_login et aussi j'aimerai travailler que si la request est en methode POST.
+Je peux controler cette personne car elle a demander à être contrôler.
+Si la procédure est Ok alors il continue le processe.
+
+<h3>Authenticator : compléter la procédure d'authentification</h3>
+Dans le dossier sécurity du fichier LoginFormAuthenticator.php, nou allons créer la cinématique
+ de connection.
+
+<?php
+
+namespace App\Security;
+
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+use Symfony\Component\Security\Core\Encoder\UserPasswordEncoderInterface;
+use Symfony\Component\Security\Core\Exception\AuthenticationException;
+use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Security\Core\User\UserProviderInterface;
+use Symfony\Component\Security\Guard\AbstractGuardAuthenticator;
+
+class LoginFormAuthenticator extends AbstractGuardAuthenticator
+{
+    protected $encoder;
+    // on se fait livré le service encoder pour pouvoir decodé le mot de passe
+    public function __construct(UserPasswordEncoderInterface $encoder)
+    {
+        $this->encoder = $encoder;
+    }
+
+    public function supports(Request $request)
+    {
+        return $request->attributes->get('_route') === 'security_login'
+            && $request->isMethod('POST');
+    }
+
+    public function getCredentials(Request $request)
+    {
+        return $request->request->get('login'); // array avec 3 infos
+        // On vas faire ressortir les 3 info dans un tableau, pour les présenter à la function
+        //suivante.
+    }
+
+    public function getUser($credentials, UserProviderInterface $userProvider)
+    {
+        return $userProvider->loadUserByUsername($credentials['email']);
+        //Je veux retourné le resultat $userProvider qui a une méthode loadUserByUsername qui à comme email par $credentials['email']
+        //grace au info qui ont etait retourné dans l'utilisateur de login.
+        //On passe par UserProviderInterface qui se trouve dans le sécurity.yaml ou tout les infos.
+        //Sont deja paramétrer app_user_provider: entity: class: App\Entity\User property: email
+        //Une fois vérifier ont vas retourné à la méthode checkCredentials.
+    }
+
+    public function checkCredentials($credentials, UserInterface $user)
+    {
+        // Vérifier que le mot de passe fourni, correspond bien au mot de passe de la base de données.
+        //Je veux vérifier que $credentials['passeword'] => $user->getPassword() que sa match bien.
+        //Doit retourné vrais ou faux si les valeurs sont valides
+        return $this->encoder->isPasswordValid($user, $credentials['passeword']);
+    }
+
+<h3>Les échecs possibles pendant l'authentification</h3>
+L'Authenticator est un douanier qui vas vérifier les information de connection, il vas verifier les informations qui se trouve dans la base de donnée.
+Toujours dans le dossier sécurity du fichier LoginFormAuthenticator.php.
+
+ public function onAuthenticationFailure(Request $request, AuthenticationException $exception)
+    {
+        //Il faut le laisser vide, il restera sur la page lOGIN.
+        //dd("Failure", $exception);
+    }
+
+    public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $providerKey)
+    {
+        return new RedirectResponse('/');
+        //Si l'authentification a reussit il retourne directement sur home page.
+    }
+
+<h3>Obtenir la raison de l'échec de l'authentification (AuthenticationUtils)</h3>
+
+php bin/console debug:autowiring auth
+
+Autowirable Types
+=================
+
+ The following classes & interfaces can be used as type-hints when autowiring:
+ (only showing classes/interfaces matching auth)
+ 
+ AuthenticationManagerInterface is the interface for authentication managers, which process Token authentication.     
+ Symfony\Component\Security\Core\Authentication\AuthenticationManagerInterface (security.authentication.manager)      
+ 
+ The TokenStorageInterface.
+ Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface (security.token_storage)
+ 
+ AccessDecisionManagerInterface makes authorization decisions.
+ Symfony\Component\Security\Core\Authorization\AccessDecisionManagerInterface (debug.security.access.decision_manager)
+ 
+ The AuthorizationCheckerInterface.
+ Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface (security.authorization_checker)
+
+ A utility class that does much of the *work* during the guard authentication process.
+ Symfony\Component\Security\Guard\GuardAuthenticatorHandler (security.authentication.guard_handler)
+
+Nous allons tester ce service.
+ Extracts Security Errors from Request.
+ Symfony\Component\Security\Http\Authentication\AuthenticationUtils (security.authentication_utils)
+
+ SessionAuthenticationStrategyInterface.
+ Symfony\Component\Security\Http\Session\SessionAuthenticationStrategyInterface (security.authentication.session_strategy)
+
+ 1 more concrete service would be displayed when adding the "--all" option.
+
+Dans le fichier security.yaml nous allons utilisé AuthenticationUtils.
+Nous appelons la 
+<?php
+
+namespace App\Controller;
+
+use App\Form\LoginType;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
+Dans le fichier security.yaml nous allons utilisé
+class SecurityController extends AbstractController
+{
+    /**
+     * @Route("/login", name="security_login")
+     */
+    public function login(AuthenticationUtils $utils): Response
+    {
+        $form = $this->createForm(LoginType::class);
+
+        //teste utils
+        //dump($utils->getLastAuthenticationError(), $utils->getLastUsername());
+
+        return $this->render('security/login.html.twig', [
+            'formView' => $form->createView(),
+            'error' => $utils->getLastAuthenticationError()
+        ]);
+    }
+}
+
+Dans le LoginFormAuthenticator.php nous integrons Security::AUTHENTICATION_ERROR
+Voir AuthenticationUtils.php
+public function onAuthenticationFailure(Request $request, AuthenticationException $exception)
+    {
+        // On appel la constante de l'erreur dans Security::AUTHENTICATION_ERROR et on stock l'erreur dans $exception.
+        $request->attributes->set(Security::AUTHENTICATION_ERROR, $exception);
+    }
+
+Et formalisons le message d'erreur sur la page login.html.twig.
+Avec un if error.
+
+{% extends 'base.html.twig' %}
+
+{% block title %}Connection !
+{% endblock %}
+
+{% block body %}
+	<h1>Connection</h1>
+	{% if error %}
+		<div class="alert alert-danger">
+			{{ error.message }}
+		</div>
+	{% endif %}
+	{{ form_start( formView ) }}
+
+	{{ form_widget( formView ) }}
+
+	<button type="submit" class="btn btn-success">Connection</button>
+
+	{{ form_end( formView ) }}
+{% endblock %}
+
+<h3>Modifier les messages d'erreur</h3>
+
+Dans le fichier LoginFormAuthenticator.php nous intégrons les messages personaliser.
+ 
+ public function getUser($credentials, UserProviderInterface $userProvider)
+    {
+        //Si tout se passe bien j'aimerai retournet return $userProvider->loadUserByUsername($credentials['email'])
+        //Mais si il lance une execption alors moi je veus lancer une nouvelle AuthenticationException 
+        //avec comme message "Cette adress email n'est pas connue".
+        try {
+            return $userProvider->loadUserByUsername($credentials['email']);
+        } catch (UsernameNotFoundException $e) {
+            throw new AuthenticationException("Cette adress email n'est pas connue");
+        }
+
+        //Je veux retourné le resultat $userProvider qui a une méthode loadUserByUsername qui à comme email par $credentials['email']
+        //grace au info qui ont etait retourné dans l'utilisateur de login.
+        //On passe par UserProviderInterface qui se trouve dans le sécurity.yaml ou tout les infos.
+        //Sont deja paramétrer app_user_provider: entity: class: App\Entity\User property: email
+        //Une fois vérifier ont vas retourné à la méthode checkCredentials.
+    }
+
+    public function checkCredentials($credentials, UserInterface $user)
+    {
+        // Vérifier que le mot de passe fourni, correspond bien au mot de passe de la base de données.
+        //Je veux vérifier que $credentials['passeword'] => $user->getPassword() que sa match bien.
+        //Doit retourné vrais ou faux si les valeurs sont valides
+        $isValid = $this->encoder->isPasswordValid($user, $credentials['password']);
+        //Si elle n'ait pas valide alors elle retourne le message "Les informations de connexion ne correspondent pas".
+        if (!$isValid) {
+            throw new AuthenticationException("Les informations de connexion ne correspondent pas");
+        }
+        // Sinon Ok
+        return true;
+    }
+
+Dans le SecurityController.php
+Nous souhaitons conserver l'email en cas d'erreur.
+
+<?php
+
+namespace App\Controller;
+
+use App\Form\LoginType;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
+
+class SecurityController extends AbstractController
+{
+    /**
+     * @Route("/login", name="security_login")
+     */
+    public function login(AuthenticationUtils $utils): Response
+    {
+        //Si email est dans getLastUsername() alors il sera stocket sous forme de tableau dans LoginType.
+        $form = $this->createForm(LoginType::class, ['email' => $utils->getLastUsername()]);
+
+        //teste utils
+        //dump($utils->getLastAuthenticationError(), $utils->getLastUsername());
+
+        return $this->render('security/login.html.twig', [
+            'formView' => $form->createView(),
+            'error' => $utils->getLastAuthenticationError()
+        ]);
+    }
+}
+
+<h3>📖 Premier récapitulatif</h3>
+
+Dans le sécurity.yaml nous avons un Autenticator pour le fiwerwall main, l'authenticator est comme un doignés, il a pout but de nous authentifiez et quand vous lui demandée. Il n'intervient que si les information renseigner sont identiques au information stocker en base. 
+
+<h3>L'Authenticator "form_login" livré par Symfony</h3>
+
+Mais nous pouvont passé directement par l'opérateur de symfony,dans security.yaml.
+        main:
+            anonymous: true
+            lazy: true
+            provider: app_user_provider
+            # guard:
+            #     authenticators:
+            #         - App\Security\LoginFormAuthenticator
+            //validation sans Authentificator.
+            form_login:
+                login_path: security_login
+                check_path: security_login
+                //en paramétrant les variables de symfony.Pour étre utiliser avec mon form.
+                username_parameter: login[email] 
+                password_parameter: login[password]
+
+
+<h3>Gérer la déconnexion avec l'option "logout"</h3>
+
+Dans le secutity.yaml nous allons créer le logout.
+
+security:
+    encoders:
+        App\Entity\User:
+            algorithm: auto
+
+    # https://symfony.com/doc/current/security.html#where-do-users-come-from-user-providers
+    providers:
+        # used to reload user from session & other features (e.g. switch_user)
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: email
+    firewalls:
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+        main:
+            anonymous: true
+            lazy: true
+            provider: app_user_provider
+            # guard:
+            #     authenticators:
+            #         - App\Security\LoginFormAuthenticator
+
+            form_login:
+                login_path: security_login
+                check_path: security_login
+                username_parameter: login[email]
+                password_parameter: login[password]
+
+            logout:
+                path: security_logout
+
+            # activate different ways to authenticate
+            # https://symfony.com/doc/current/security.html#firewalls-authentication
+
+            # https://symfony.com/doc/current/security/impersonating_user.html
+            # switch_user: true
+
+    # Easy way to control access for large sections of your site
+    # Note: Only the *first* access control that matches will be used
+    access_control:
+        # - { path: ^/admin, roles: ROLE_ADMIN }
+        # - { path: ^/profile, roles: ROLE_USER }
+
+Dans SecurityController.php nous allons créer la route pour le logout.
+    /**
+    * @Route("/logout", name="security_logout")
+    */
+    public function logout()
+    {
+    }
+
+<h3>Mise en forme de la barre de navigation</h3>
+
+Documentation symfony App variable.
+https://symfony.com/doc/2.8/templating/app_variable.html
+https://symfony.com/doc/current/templates.html
+
+Dans le dossier shared du fichier _navbar.html.
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+	<div class="container-fluid">
+		<a class="navbar-brand" href="/">SymShop</a>
+		<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarColor03" aria-controls="navbarColor03" aria-expanded="false" aria-label="Toggle navigation">
+			<span class="navbar-toggler-icon"></span>
+		</button>
+
+		<div class="collapse navbar-collapse" id="navbarColor03">
+			<ul class="navbar-nav me-auto">
+				{% for c in categoryRepository.findAll() %}
+					<li class="nav-item">
+						<a class="nav-link" href="#">{{ c.name }}</a>
+					</li>
+				{% endfor %}
+			</ul>
+			<ul class="navbar-nav">
+            // integration de l'app variable pour un choix des commandes de connection suivant la position de connection.
+				{% if app.user %}
+					<li class="nav-item">
+						<a href="{{ path('security_logout') }}" class="btn btn-danger">Logout</a>
+					</li>
+				{% else %}
+					<li class="nav-item">
+						<a href="#" class="nav-link">Inscription</a>
+					</li>
+					<li class="nav-item">
+						<a href="{{ path('security_login') }}" class="btn btn-sucess">Login</a>
+					</li>
+				{% endif %}
+
+			</ul>
+		</div>
+	</div>
+</nav>
+
+<h3>Interlude : les commandes essentielles (config:dump et debug:config)</h3>
+Pour plus d'autonomie 
+php bin/console debug:config
+
+https://symfony.com/doc/current/reference/configuration/debug.html
+
+Available registered bundles with their extension alias if available
+====================================================================
+
+ ---------------------------- ------------------------ 
+  Bundle name                  Extension alias         
+ ---------------------------- ------------------------ 
+  DebugBundle                  debug
+  DoctrineBundle               doctrine
+  DoctrineFixturesBundle       doctrine_fixtures       
+  DoctrineMigrationsBundle     doctrine_migrations     
+  FrameworkBundle              framework
+  MakerBundle                  maker
+  MonologBundle                monolog
+  SecurityBundle               security
+  SensioFrameworkExtraBundle   sensio_framework_extra  
+  TwigBundle                   twig
+  TwigExtraBundle              twig_extra
+  WebProfilerBundle            web_profiler
+ ---------------------------- ------------------------
+
+ // Provide the name of a bundle as the first argument of this command to dump its configuration. (e.g.
+ // debug:config FrameworkBundle)
+
+ // For dumping a specific option, add its path as the second argument of this command. (e.g. debug:config
+ // FrameworkBundle serializer to dump the framework.serializer configuration)
+
+exemple:
+php bin/console debug:config security                                          
+                           
+Current configuration for extension with alias "security"
+=========================================================
+
+security:
+    encoders:
+        App\Entity\User:
+            algorithm: auto
+            migrate_from: {  }
+            hash_algorithm: sha512
+            key_length: 40
+            ignore_case: false
+            encode_as_base64: true
+            iterations: 5000
+            cost: null
+            memory_cost: null
+            time_cost: null
+    providers:
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: email
+                manager_name: null
+    firewalls:
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+            methods: {  }
+            user_checker: security.user_checker
+            stateless: false
+            lazy: false
+        main:
+            anonymous:
+                lazy: false
+                secret: null
+            lazy: true
+            provider: app_user_provider
+            form_login:
+                login_path: security_login
+                check_path: security_login
+                username_parameter: 'login[email]'
+                password_parameter: 'login[password]'
+                remember_me: true
+                use_forward: false
+                require_previous_session: false
+                csrf_parameter: _csrf_token
+                csrf_token_id: authenticate
+                enable_csrf: false
+                post_only: true
+                always_use_default_target_path: false
+                default_target_path: /
+                target_path_parameter: _target_path
+                use_referer: false
+                failure_path: null
+                failure_forward: false
+                failure_path_parameter: _failure_path
+            logout:
+                path: security_logout
+                csrf_parameter: _csrf_token
+                csrf_token_id: logout
+                target: /
+                invalidate_session: true
+                delete_cookies: {  }
+                handlers: {  }
+            methods: {  }
+            security: true
+            user_checker: security.user_checker
+            stateless: false
+    access_control: {  }
+    access_decision_manager:
+        strategy: affirmative
+        allow_if_all_abstain: false
+        allow_if_equal_granted_denied: true
+    access_denied_url: null
+    session_fixation_strategy: migrate
+    hide_user_not_found: true
+    always_authenticate_before_granting: false
+    erase_credentials: true
+    enable_authenticator_manager: false
+    role_hierarchy: {  }
+
+Exemple de la console dump:
+php bin/console config:dump
+
+Available registered bundles with their extension alias if available
+====================================================================
+
+ ---------------------------- ------------------------
+  Bundle name                  Extension alias        
+ ---------------------------- ------------------------
+  DebugBundle                  debug
+  DoctrineBundle               doctrine
+  DoctrineFixturesBundle       doctrine_fixtures
+  DoctrineMigrationsBundle     doctrine_migrations
+  FrameworkBundle              framework
+  MakerBundle                  maker
+  MonologBundle                monolog
+  SecurityBundle               security
+  SensioFrameworkExtraBundle   sensio_framework_extra
+  TwigBundle                   twig
+  TwigExtraBundle              twig_extra
+  WebProfilerBundle            web_profiler
+ ---------------------------- ------------------------
+
+ // Provide the name of a bundle as the first argument of this command to dump its default configuration. (e.g.
+ // config:dump-reference FrameworkBundle)
+ //
+ // For dumping a specific option, add its path as the second argument of this command. (e.g.
+ // config:dump-reference FrameworkBundle profiler.matcher to dump the
+ // framework.profiler.matcher configuration)
+
+php bin/console config:dump security
+Permet de voir tout les options du composant sécurity.
+
 
 
 
