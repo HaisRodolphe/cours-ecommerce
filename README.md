@@ -17,7 +17,7 @@
 <h3>git status</h3>
 <h3>git add .</h3>
 <h3>git commit -m "Mise en place de doctrine et de nos premieres entités"</h3>
-
+https://symfony.com/bundles
 <p>Liste des commandes lier aux bundel.<br />
 php bin/console</p>
 Creating Symfony Applications
@@ -2665,8 +2665,580 @@ Available registered bundles with their extension alias if available
 php bin/console config:dump security
 Permet de voir tout les options du composant sécurity.
 
+<h2>La sécurité : autorisations et rôles (50 minutes)</h2>
+
+<h3>Introduction aux autorisations dans Symfony 5</h3>
+Dans se chapitre nous allons voir les ROLES.
+Les ROLES permettent de donner des droits au utilisateurs.
+
+ROLE_USER     ROLE_ADMIN        ROLE_CE_QUE_JE_VEUX
+
+<h3>La méthode "start()" de l'authenticator et les ACL</h3>
+Dans le fichier security.yaml nous pouvons bloquer des accées vias les roles dans le access_control:
+
+security:
+    encoders:
+        App\Entity\User:
+            algorithm: auto
+
+    # https://symfony.com/doc/current/security.html#where-do-users-come-from-user-providers
+    providers:
+        # used to reload user from session & other features (e.g. switch_user)
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: email
+    firewalls:
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+        main:
+            anonymous: true
+            lazy: true
+            provider: app_user_provider
+            guard:
+                authenticators:
+                    - App\Security\LoginFormAuthenticator
+
+            # form_login:
+            #     login_path: security_login
+            #     check_path: security_login
+            #     username_parameter: login[email]
+            #     password_parameter: login[password]
+
+            logout:
+                path: security_logout
+
+            # activate different ways to authenticate
+            # https://symfony.com/doc/current/security.html#firewalls-authentication
+
+            # https://symfony.com/doc/current/security/impersonating_user.html
+            # switch_user: true
+
+    # Easy way to control access for large sections of your site
+    # Note: Only the *first* access control that matches will be used
+    access_control:
+        - { path: ^/admin, roles: ROLE_ADMIN }
+        # - { path: ^/profile, roles: ROLE_USER }
+
+Dans le fichier LoginFormAuthenticator.php nous devons retouner vers une adresse sur:
+
+use Symfony\Component\HttpFoundation\RedirectResponse;
+
+public function start(Request $request, AuthenticationException $authException = null)
+    {
+        return new RedirectResponse('/login');
+    }
+
+<h3> Découverte du service Security</h3>
+
+php bin/console debug:autowiring security
+
+Autowirable Types
+=================
+Nous allons utilisé une classe sécurity.
+Helper class for commonly-needed security tasks.
+ Symfony\Component\Security\Core\Security (security.helper)
+
+Dans le dossier du contrôler du fichier CatheroyController.php
+On se fait livrer Security $security.
+
+use Symfony\Component\Security\Core\Security;
+use Symfony\Component\HttpFoundation\File\Exception\AccessDeniedException;
+
+/**
+     * @Route("/admin/category/{id}/edit", name="category_edit")
+     */
+    public function edit($id, CategoryRepository $categoryRepository, Request $request, EntityManagerInterface $em, Security $security): Response
+    {
+        //On passe le user dans la classe sécurity et on le passe en getUser.
+        $user = $security->getUser();
+
+        //Si le user n'est pas admin retourne à zero il sera redirigé dans le security_login
+        if ($user === null) {
+            return $this->redirectToRoute('security_login');
+        }
+        //Mais si le user na pas la role admin il aura un message.
+        if (!in_array("ROLE_ADMIN", $user->getRoles())) {
+            throw new AccessDeniedException("Vous n'avez pas le droit d'accéder à cette ressource");
+        }
 
 
+        $category = $categoryRepository->find($id);
+
+        $form = $this->createform(CategoryType::class, $category);
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+
+            return $this->redirectToRoute('homepage');
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('category/edit.html.twig', [
+            'category' => $category,
+            'formView' => $formView
+        ]);
+    }
+
+<h2> Les raccourcis de l'AbstractController pour la sécurité</h3>
+Dans la CathegoryControlerr.php ont peu se faire livrais par AbstractController,
+La class sécurity.
+
+    /**
+     * @Route("/admin/category/{id}/edit", name="category_edit")
+     */
+    public function edit($id, CategoryRepository $categoryRepository, Request $request, EntityManagerInterface $em, Security $security): Response
+    {
+        //en utilisant la méthode denyAccessUnlessGranted nous pouvont tester si c'est un USER qui à le rôle admin ou passe
+        //et renvoyer la réponse.
+        $this->denyAccessUnlessGranted("ROLE_ADMIN", null, "Vous n'avez pas le droit d'accéder à cette ressource");
+        
+        $category = $categoryRepository->find($id);
+
+        $form = $this->createform(CategoryType::class, $category);
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+
+            return $this->redirectToRoute('homepage');
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('category/edit.html.twig', [
+            'category' => $category,
+            'formView' => $formView
+        ]);
+    }
+
+<h3>Contrôler les accès grâce à l'annotation @IsGranted</h3>
+Dans la CathegoryController.php ont peu se faire livrais le use qui vas avec.
+Dans cette section nous pouvons directement mettre la méthode de sécurité des ROLEs dans l'annotation.
+
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
+
+    /**
+     * @Route("/admin/category/{id}/edit", name="category_edit")
+     * //Voici la ligne qui permet de savoir si vous pouvez allé sur la page avec @IsGranted.
+     * @IsGranted("ROLE_ADMIN", message="Vous n'avez pas le droit d'accéder à cette ressource")
+     */
+    public function edit($id, CategoryRepository $categoryRepository, Request $request, EntityManagerInterface $em): Response
+    {
+        
+        $category = $categoryRepository->find($id);
+
+        $form = $this->createform(CategoryType::class, $category);
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+
+            return $this->redirectToRoute('homepage');
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('category/edit.html.twig', [
+            'category' => $category,
+            'formView' => $formView
+        ]);
+    }
+
+<h3>Contrôler l'accès à un objet en particulier</h3>
+Le but est de définir la personne qui à créer la category en creans une relation.
+Entre la Category et le user. Afin de bloquer le le user qui nas pas créer la category
+php bin/console make:entity Category
+
+ Your entity already exists! So let's add some new fields!
+
+ New property name (press <return> to stop adding fields):
+ > owner
+
+ Field type (enter ? to see all types) [string]:
+ > relation
+relation
+
+ What class should this entity be related to?:
+ > User
+User
+
+ Relation type? [ManyToOne, OneToMany, ManyToMany, OneToOne]:
+ > ManyToOne
+ManyToOne
+;49m
+ Is the Category.owner property allowed to be null (nullable)? (yes/no) [yes]:
+ > 
+
+ Do you want to add a new property to User so that you can access/update Category objects from it -
+ e.g. $user->getCategories()? (yes/no) [yes]:
+ > 
+
+ A new property will also be added to the User class so that you can access the related Category objects from it.
+
+ New field name inside User [categories]:
+ >
+
+ updated: src/Entity/Category.php
+ updated: src/Entity/User.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):        
+  Success! 
+
+
+Dans la CathegoryController.php ont peu se faire livrais le use est faire le controle entre le createur de la category et la category.
+    /**
+     * @Route("/admin/category/{id}/edit", name="category_edit")
+     */
+    public function edit($id, CategoryRepository $categoryRepository, Request $request, EntityManagerInterface $em): Response
+    {
+
+
+
+        $category = $categoryRepository->find($id);
+
+        if (!$category) {
+            throw new NotFoundHttpException("Cette catégory n'existe pas");
+        }
+        //1.Récupérer l'utilisateur
+        $user = $this->getUser();
+        //2.Rediriger si personne n'est connecté
+        if (!$user) {
+            return $this->redirectToRoute("security_login");
+        }
+        //3.Vérifier si c'est le créateur de la catégorie
+        if ($user !== $category->getOwner()) {
+            throw new AccessDeniedHttpException("Vous n'êtes pas le propriétaire de cette catégorie");
+        }
+
+        $form = $this->createform(CategoryType::class, $category);
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+
+            return $this->redirectToRoute('homepage');
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('category/edit.html.twig', [
+            'category' => $category,
+            'formView' => $formView
+        ]);
+    }
+
+<h3>Encapsuler la logique d'accès dans un Voter</h3>
+
+📖 Documentation officielle de Symfony sur les Voters :
+https://symfony.com/doc/current/security/voters.html
+
+📖 En savoir plus sur les annotations de sécurité comme @IsGranted :
+https://symfony.com/bundles/SensioFrameworkExtraBundle/current/annotations/security.html
+https://symfony.com/bundles/SensioFrameworkExtraBundle/current/index.html
+
+Les voters permettent d'encapsuler et de centraliser une logique d'accès dans une classe.
+Elle permait d'éditer des droit.
+
+
+php bin/console make:voter CategoryVoter
+
+ created: src/Security/Voter/CategoryVoter.php
+  Success! 
+ Next: Open your voter and add your logic.
+ Find the documentation at https://symfony.com/doc/current/security/voters.html
+
+
+Creation du dossier voter et du fichier CategoryVoter.php
+
+<?php
+
+namespace App\Security\Voter;
+
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+use Symfony\Component\Security\Core\Authorization\Voter\Voter;
+use Symfony\Component\Security\Core\User\UserInterface;
+
+class CategoryVoter extends Voter
+{
+    protected function supports($attribute, $subject): bool
+    {
+        // replace with your own logic
+        // https://symfony.com/doc/current/security/voters.html
+        return in_array($attribute, ['CAN_EDIT'])
+            && $subject instanceof \App\Entity\Category;
+    }
+
+    protected function voteOnAttribute(string $attribute, $subject, TokenInterface $token): bool
+    {
+        $user = $token->getUser();
+        // if the user is anonymous, do not grant access
+        if (!$user instanceof UserInterface) {
+            return false;
+        }
+
+        // ... (check conditions and return true to grant permission) ...
+        switch ($attribute) {
+            case 'CAN_EDIT':
+                return $subject->getOwner() === $user;
+                // return true or false
+        }
+
+        return false;
+    }
+}
+
+Dans le fichier CategoryController.php on génère l'accés au CategoryVoter.php
+Cette solution reste la plus adapter pour notre projet.
+    /**
+     * @Route("/admin/category/{id}/edit", name="category_edit")
+     */
+    public function edit($id, CategoryRepository $categoryRepository, Request $request, EntityManagerInterface $em, Security $security): Response
+    {
+
+
+
+        $category = $categoryRepository->find($id);
+
+        if (!$category) {
+            throw new NotFoundHttpException("Cette catégory n'existe pas");
+        }
+
+        //Grace à cette ligne nous faisont appel au voter.
+        $this->denyAccessUnlessGranted('CAN_EDIT', $category, "Vous n'êtes pas le propriétaire de cette catégorie");
+        
+
+        $form = $this->createform(CategoryType::class, $category);
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+
+            return $this->redirectToRoute('homepage');
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('category/edit.html.twig', [
+            'category' => $category,
+            'formView' => $formView
+        ]);
+    }
+Mais nous pouvons le faire directement sur la route.    
+Mais cette solution n'est pas la mieux adapté pour notre projet
+    /**
+     * @Route("/admin/category/{id}/edit", name="category_edit")
+     * @IsGranted("CAN_EDIT", subject="id", message="Vous n'êtes pas le propriétaire de cette catégorie")
+     */
+    public function edit($id, CategoryRepository $categoryRepository, Request $request, EntityManagerInterface $em, Security $security): Response
+    {
+
+
+
+        $category = $categoryRepository->find($id);
+
+        if (!$category) {
+            throw new NotFoundHttpException("Cette catégory n'existe pas");
+        }
+        //$security->isGranted('CAN_EDIT', $category);
+        //$this->denyAccessUnlessGranted('CAN_EDIT', $category->getId(), "Vous n'êtes pas le propriétaire de cette catégorie");
+        // $user = $this->getUser();
+
+        // if (!$user) {
+        //     return $this->redirectToRoute("security_login");
+        // }
+
+        // if ($user !== $category->getOwner()) {
+        //     throw new AccessDeniedHttpException("Vous n'êtes pas le propriétaire de cette catégorie");
+        // }
+
+        $form = $this->createform(CategoryType::class, $category);
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+
+            return $this->redirectToRoute('homepage');
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('category/edit.html.twig', [
+            'category' => $category,
+            'formView' => $formView
+        ]);
+    }
+
+Adaptation du fichier CategoryVoter.php pour la relation avec la route.
+
+<?php
+
+namespace App\Security\Voter;
+
+use App\Repository\CategoryRepository;
+use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Security\Core\Authorization\Voter\Voter;
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+
+class CategoryVoter extends Voter
+{
+    protected $categoryRepository;
+
+    public function __construct(CategoryRepository $categoryRepository)
+    {
+        $this->categoryRepository = $categoryRepository;
+    }
+
+    protected function supports($attribute, $subject): bool
+    {
+        // replace with your own logic
+        // https://symfony.com/doc/current/security/voters.html
+        return in_array($attribute, ['CAN_EDIT'])
+            && is_numeric($subject);
+    }
+
+    protected function voteOnAttribute(string $attribute, $subject, TokenInterface $token): bool
+    {
+        $user = $token->getUser();
+        // if the user is anonymous, do not grant access
+        if (!$user instanceof UserInterface) {
+            return false;
+        }
+        $category = $this->categoryRepository->find($subject);
+
+        if (!$category) {
+            return false;
+        }
+
+        // ... (check conditions and return true to grant permission) ...
+        switch ($attribute) {
+            case 'CAN_EDIT':
+                return $category->getOwner() === $user;
+                // return true or false
+        }
+
+        return false;
+    }
+}
+
+<h3>📖 Vraiment comprendre les Voters</h3>
+La logique des voters, pourquoi des voters
+
+Par exemple pour un CAN_EDIT ont pourrait avoir plusieur Voter1, Voter2 et Voter3.
+On peu créer plusieur voter pour une même question.
+Symfony posséde un access desition manager, il appelera tout les voters; Voter1, Voter2 et Voter3.
+Qui reponderon pour pouvoir voté et il vont pouvoir dire si ils ont le droit ou ils n'ont pas le droit
+Voter1 ok, Voter2 negattif, Voter3 ok.
+Nous allons pouvoir créer une stratégie de prise de décision:
+(La statégie unanimous)
+Par exemple si sur 10 voter il y en n'a un seul qui dis non alors pas d'access a l'edition de la category.
+(La statégie consensus)
+Par exemple si sur 10 voter il y en n'a 6 qui dis oui alors vous avez access a l'edition de la category.
+(La statégie affirmative)
+Par exemple si sur 10 voter il y en n'a 1 qui dis oui alors vous avez access a l'edition de la category.
+
+Les voter se sont des classes qui vont chacune avoir leur logique pour déterminer si on n'a le droit et elles peuvent se cumuler et peuvent repondre des chose différentes des une des autres. Chacune vas voter, suivant la stratégie qui à était mis en place dans le fichier de configue. Qui dira si on n'a acces ou pas.
+
+Grace au voter on passe de droit d'essentialisation (ROLES), je SUIS un ADMIN a je SUIS un MODERATOR, 
+a une strategie de droit d'autorisation, j'ai le DROIT de FAIRE CECI, J'ai le DROIT de FAIRE CELA.
+Cette personne à le droit de modifier cette category, se produit, de la voir de l'afficher de le suprimer.
+On n'est sur une logique d'action.
+
+<h3>Remise en place avant de passer à la suite</h3>
+📖 Documentation officielle de Symfony sur les Voters : 
+https://symfony.com/doc/current/security/voters.html
+📖 En savoir plus sur les annotations de sécurité comme @IsGranted : 
+https://symfony.com/doc/current/bundles/SensioFrameworkExtraBundle/annotations/security.html
+📖 Documentation officielle sur le composant Security : 
+https://symfony.com/doc/current/security.html 
+
+Fichier security.yaml retour en arriere.
+security:
+    encoders:
+        App\Entity\User:
+            algorithm: auto
+
+    # https://symfony.com/doc/current/security.html#where-do-users-come-from-user-providers
+    providers:
+        # used to reload user from session & other features (e.g. switch_user)
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: email
+    firewalls:
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+        main:
+            anonymous: true
+            lazy: true
+            provider: app_user_provider
+            //commente guard.
+            # guard:
+            #     authenticators:
+            #         - App\Security\LoginFormAuthenticator
+            //Reactivation de Form login.
+            form_login:
+                login_path: security_login
+                check_path: security_login
+                username_parameter: login[email]
+                password_parameter: login[password]
+
+            logout:
+                path: security_logout
+
+            # activate different ways to authenticate
+            # https://symfony.com/doc/current/security.html#firewalls-authentication
+
+            # https://symfony.com/doc/current/security/impersonating_user.html
+            # switch_user: true
+
+    # Easy way to control access for large sections of your site
+    # Note: Only the *first* access control that matches will be used
+    //controle par le role ADMIN
+    access_control:
+        - { path: ^/admin, roles: ROLE_ADMIN }
+        # - { path: ^/profile, roles: ROLE_USER }
+
+Supression de exemple des autorisation qui se gérer pas security.yaml
+    /**
+     * @Route("/admin/category/{id}/edit", name="category_edit")
+     */
+    public function edit($id, CategoryRepository $categoryRepository, Request $request, EntityManagerInterface $em): Response
+    {
+
+        $category = $categoryRepository->find($id);
+
+        if (!$category) {
+            throw new NotFoundHttpException("Cette catégory n'existe pas");
+        }
+
+        $form = $this->createform(CategoryType::class, $category);
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+
+            return $this->redirectToRoute('homepage');
+        }
+
+        $formView = $form->createView();
+
+        return $this->render('category/edit.html.twig', [
+            'category' => $category,
+            'formView' => $formView
+        ]);
+    }
 
 
 
