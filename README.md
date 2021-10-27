@@ -3240,5 +3240,1312 @@ Supression de exemple des autorisation qui se gérer pas security.yaml
         ]);
     }
 
+<h2>La session dans Symfony 5 (1 heure et 30 minutes)</h2>
+
+<h3>Mise en place du panier et découverte de la session</h3>
+
+php bin/console make:controller CartController
+
+ created: src/Controller/CartController.php
+ created: templates/cart/index.html.twig
+
+Mise en place de la gestion du panier sur CartController.php
+
+<?php
+
+namespace App\Controller;
+
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+
+class CartController extends AbstractController
+{
+    /**
+     * @Route("/cart/add/{id}", name="cart_add")
+     */
+    public function add($id, Request $request): Response
+    {
+        // 1. Retrouver le panier dans la session (sous forme de tableau) 
+        // 2. Si il n'existe pas encore, alors prendre un tableau vide
+        $cart = $request->getSession()->get('cart', []);
+
+        // 3. Voir si le produit ($id) existe déjà dans le tableau [12 => 3, 29 => 2]
+        // 4. Si c'est le cas, simplement augmenter la quantité
+        // 5. Sinon, ajouter le produit avec la quantité 1
+        if (array_key_exists($id, $cart)) {
+            $cart[$id]++; //si le produit est déjà en panier il ajouterat +1
+        } else {
+            $cart[$id] = 1; // Si le produit n'est pas dans le panier il metrat 1
+        }
+
+        // 6. Enregistrer le tableau mis à jour dans la session
+        $request->getSession()->set('cart', $cart);
+        // Supression de cart
+        //$request->getSession()->remove('cart');
+        //teste
+        dd($request->getSession()->get('cart'));
+    }
+}
+
+Appel de cart dans show.html.twig
+
+<a href="{{ path('cart_add', {'id': product.id}) }}" class="btn btn-success btn-lg">
+	<i class="fas fa-shopping-cart"></i>
+	Ajouter au panier
+</a>
+
+<h3>Sécuriser la procédure d'ajout d'un produit au panier</h3>
+Creation de la sécurisation d'un panier sur CartController.php
+<?php
+
+namespace App\Controller;
+
+use App\Repository\ProductRepository;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+
+class CartController extends AbstractController
+{
+    /**
+     * //requirements={"id":"\d+"} permet d'imposé l'appel d'un nombre.
+     * @Route("/cart/add/{id}", name="cart_add", requirements={"id":"\d+"})
+     */
+    public function add($id, Request $request, ProductRepository $productRepository): Response
+    {
+        // 0. Securisation: est-ce que le produit existe ?
+        $product = $productRepository->find($id);
+
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit $id n'existe pas !");
+        }
+
+        // 1. Retrouver le panier dans la session (sous forme de tableau) 
+        // 2. Si il n'existe pas encore, alors prendre un tableau vide
+        $cart = $request->getSession()->get('cart', []);
+
+        // 3. Voir si le produit ($id) existe déjà dans le tableau [12 => 3, 29 => 2]
+        // 4. Si c'est le cas, simplement augmenter la quantité
+        // 5. Sinon, ajouter le produit avec la quantité 1
+        if (array_key_exists($id, $cart)) {
+            $cart[$id]++; //si le produit est déjà en panier il ajouterat +1
+        } else {
+            $cart[$id] = 1; // Si le produit n'est pas dans le panier il metrat 1
+        }
+
+        // 6. Enregistrer le tableau mis à jour dans la session
+        $request->getSession()->set('cart', $cart);
+        // Supression de cart
+        //$request->getSession()->remove('cart');
+        //teste
+        return $this->redirectToRoute('product_show', [
+            'category_slug' => $product->getCategory()->getSlug(),
+            'slug' => $product->getSlug()
+        ]);
+    }
+}
+
+<h3>Se faire "livrer" la session grâce à la SessionInterface</h3>
+Dans l'argument resolver permet de passé tout
+
+<?php
+
+namespace App\Controller;
+
+use App\Repository\ProductRepository;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Session\SessionInterface;
+
+class CartController extends AbstractController
+{
+    /**
+     * //requirements={"id":"\d+"} permet d'imposé l'appel d'un nombre.
+     * @Route("/cart/add/{id}", name="cart_add", requirements={"id":"\d+"})
+     */
+    public function add($id, ProductRepository $productRepository, SessionInterface $session, EntityManagerInterface $em): Response
+    {
+        // 0. Securisation: est-ce que le produit existe ?
+        $product = $productRepository->find($id);
+
+
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit $id n'existe pas !");
+        }
+
+        // 1. Retrouver le panier dans la session (sous forme de tableau) 
+        // 2. Si il n'existe pas encore, alors prendre un tableau vide
+        $cart = $session->get('cart', []);
+
+        // 3. Voir si le produit ($id) existe déjà dans le tableau [12 => 3, 29 => 2]
+        // 4. Si c'est le cas, simplement augmenter la quantité
+        // 5. Sinon, ajouter le produit avec la quantité 1
+        if (array_key_exists($id, $cart)) {
+            $cart[$id]++; //si le produit est déjà en panier il ajouterat +
+
+        } else {
+            $cart[$id] = 1; // Si le produit n'est pas dans le panier il metrat 1
+        }
+
+        // 6. Enregistrer le tableau mis à jour dans la session
+        $session->set('cart', $cart);
+        // Supression de cart
+        //$request->getSession()->remove('cart');
+        //teste
+        return $this->redirectToRoute('product_show', [
+            'category_slug' => $product->getCategory()->getSlug(),
+            'slug' => $product->getSlug()
+        ]);
+    }
+}
+
+<h3>Découverte des "bags" et du FlashBag</h3>
+
+Les données de la Session sont stockées dans des ParaméterBags (sortes de surcouches de tableaux).
+Les information sont rangées dans des sacs des bags en anglais.
+Quand nous faisonts un dd($session); dans CartController.php
+Voici de qu'il nous retourne sur (https://127.0.0.1:8000/cart/add/1011)
+
+CartController.php on line 47:
+Symfony\Component\HttpFoundation\Session\Session {#879 ▼
+  #storage: Symfony\Component\HttpFoundation\Session\Storage\NativeSessionStorage {#903 ▶}
+  -flashName: "flashes"
+  -attributeName: "attributes"
+  -data: &2 array:2 [▼
+    // il nous retourne un sac _sf2_attributes qui nous retourne un tableau cart.
+
+    "_sf2_attributes" => &1 array:5 [▼
+      "_csrf/https-login" => "-SOG3QuA7DOwaSwWJdNFyv8CDxONHzmOMD_NPcR3ybc"
+      "_security_main" => "O:74:"Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken":3:{i:0;N;i:1;s:4:"main";i:2;a:5:{i:0;O:30:"Proxies\__CG__\App\Entity\User":7:{ ▶"
+      "_csrf/https-category" => "XY2NCyPLEpB2Mgu6u050g9hAFOAwDc-ggNNJv2068lg"
+      "_csrf/https-product" => "psWrbfquXPp4D2ooJQkTskHbVc1ThEjfAxtepOtVhCA"
+      "cart" => array:1 [▼
+        1011 => 4
+      ]
+    ]
+    "_symfony_flashes" => &3 []
+  ]
+  -usageIndex: &4 4
+  -usageReporter: array:2 [▼
+    0 => Symfony\Component\HttpKernel\EventListener\SessionListener {#107 ▶}
+    1 => "onSessionUsage"
+  ]
+}
+
+A chaque fois que nous faisons appel à $session->set('cart', $cart);
+Il créera un sac .
+
+Mais nous pouvont créer des sac volontairement avec $session->registerBag(new bag)
+Mais "_symfony_flashes" => &3 [] lui est comme un repondeur ont peux lui passé des messages et  il permet d'afficher des messages coté l'utilisateur.
+
+dd($session->getBag('flashes'));
+
+CartController.php on line 49:
+Symfony\Component\HttpFoundation\Session\Flash\FlashBag {#661 ▼
+  -name: "flashes"
+  -flashes: & []
+  -storageKey: "_symfony_flashes"
+}
+
+Pour écrire un message avec flashBag.
+
+    /** @var FlashBag  */
+    $flashBag = $session->getBag('flashes');
+
+    $flashBag->add('success', "Tout s'est bien passé");
+    $flashBag->add('warning', "Atention !");
+    //teste
+    dd($flashBag);
+
+retour du test
+
+CartController.php on line 54:
+Symfony\Component\HttpFoundation\Session\Flash\FlashBag {#880 ▼
+  -name: "flashes"
+  -flashes: & array:2 [▼
+    "success" => array:1 [▼
+      0 => "Tout s'est bien passé"
+    ]
+    "warning" => array:1 [▼
+      0 => "Atention !"
+    ]
+  ]
+  -storageKey: "_symfony_flashes"
+}
+
+Mais quand on lit le message il disparaisse.
+
+    /** @var FlashBag  */
+    $flashBag = $session->getBag('flashes');
+
+    $flashBag->add('success', "Tout s'est bien passé");
+    $flashBag->add('warning', "Atention !");
+    //en realisant un dump en get nous simulons la lecture du message.
+    dump($flashBag->get('success'));
+    //teste
+    dd($flashBag);
+
+retour du test  success à disparus du fait de sa lecture.
+
+CartController.php on line 54:
+array:1 [▼
+  0 => "Tout s'est bien passé"
+]
+CartController.php on line 56:
+Symfony\Component\HttpFoundation\Session\Flash\FlashBag {#661 ▼
+  -name: "flashes"
+  -flashes: & array:1 [▼
+    "warning" => array:6 [▶]
+  ]
+  -storageKey: "_symfony_flashes"
+}
+
+La methode add permet de d'ajouter les messages alors que la méthode get permet de lire les messages.
+
+<h3>Afficher les message Flash dans Twig</h3>
+
+Dans show.html.twig
+Dans vos fichiers Twig, vous avez accés à une variable appelée "app" 
+qui contient beaucoup d'info intéressantes.
+https://symfony.com/doc/2.8/templating/app_variable.html
+https://twig.symfony.com/
+https://symfony.com/doc/current/reference/twig_reference.html
+
+Il permet d'afficher le message dans quand il y a un ajoute au panier.
+Puis le suprime au rafraichissement.
+{{ dump(app.session.getBag('flashes').get('success')) }}
+
+Mais symfony de twig il y a plus simple:
+{{ dump(app.flashes) }}
+
+Mais il est possible de selectionnné le message programmer.
+Permet de recevoir les messages de success.
+{{ dump(app.flashes('success')) }}
+
+Permet d'afficher des message sous forme de tableau.
+
+Dans show.html.twig on rajout une boucle for:
+
+{% extends "base.html.twig" %}
+
+{% block title %}
+	page de
+	{{ product.name }}
+{% endblock %}
+
+{% block body %}
+    //Pour afficher les messages nous mettons en place les boucles for. 
+	{% for rubrique, messages in app.flashes %}
+		<div class="alert alert-{{ rubrique }}">
+			{% for message in messages %}
+				<p>{{ message }}</p>
+			{% endfor %}
+		</div>
+	{% endfor %}
+
+Dans le CartController.php sur la fiche d'un produit.
+
+        /** @var FlashBag  */
+        $flashBag = $session->getBag('flashes');
+
+        $flashBag->add('success', "Le produit a bien été ajouté au panier");
+        $flashBag->add('info', "Une petit information");
+        $flashBag->add('warning', "Attention !");
+        $flashBag->add('success', "Un autre succés");
+
+Il vas afficher les différent messages.
+
+Mais il est préférable de pouvoir l'intégrer sur tout les pages donc il doit étre 
+mis dans le base.html.
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<title>
+			{% block title %}Welcome!
+			{% endblock %}
+		</title>
+		{# Run `composer require symfony/webpack-encore-bundle`
+																												and uncomment the following Encore helpers to start using Symfony UX #}
+		{% block stylesheets %}
+			<link href="{{ asset('assets/css/bootstrap.min.css') }}" rel="stylesheet"/>
+			<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/all.min.css">
+		{% endblock %}
+
+		{% block javascripts %}
+			{#{{ encore_entry_script_tags('app') }}#}
+		{% endblock %}
+	</head>
+	<body>
+		{% include "shared/_navbar.html.twig" %}
+		<div class="container pt-5">
+			{% for rubrique, messages in app.flashes %}
+				<div class="alert alert-{{ rubrique }}">
+					{% for message in messages %}
+						<p>{{ message }}</p>
+					{% endfor %}
+				</div>
+			{% endfor %}
+
+			{% block body %}{% endblock %}
+		</div>
+
+		{% block javascritps %}{% endblock %}
+	</body>
+</html>
+
+<h3>Les raccourcis de l'AbstractController</h3>
+
+Il est possible de se faire livré le FlashBagInterface $flashBag et ainsi pouvoir 
+ se faire livrée le flashBag.
+
+
+ public function add($id, ProductRepository $productRepository, SessionInterface $session, FlashBagInterface $flashBag): Response
+    {
+
+        // 0. Securisation: est-ce que le produit existe ?
+        $product = $productRepository->find($id);
+
+
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit $id n'existe pas !");
+        }
+
+        // 1. Retrouver le panier dans la session (sous forme de tableau) 
+        // 2. Si il n'existe pas encore, alors prendre un tableau vide
+        $cart = $session->get('cart', []);
+
+        // 3. Voir si le produit ($id) existe déjà dans le tableau [12 => 3, 29 => 2]
+        // 4. Si c'est le cas, simplement augmenter la quantité
+        // 5. Sinon, ajouter le produit avec la quantité 1
+        if (array_key_exists($id, $cart)) {
+            $cart[$id]++; //si le produit est déjà en panier il ajouterat +
+
+
+        } else {
+            $cart[$id] = 1; // Si le produit n'est pas dans le panier il metrat 1
+        }
+
+        // 6. Enregistrer le tableau mis à jour dans la session
+        $session->set('cart', $cart);
+
+        //L'utilisation de flashBag sera identique.
+        $flashBag->add('success', "Le produit a bien été ajouté au panier");
+
+        // Supression de cart
+        //$request->getSession()->remove('cart');
+
+        return $this->redirectToRoute('product_show', [
+            'category_slug' => $product->getCategory()->getSlug(),
+            'slug' => $product->getSlug()
+        ]);
+    }
+}
+
+Mais nous pouvont aussi nous faire livrée le flashBag.
+Directement avec:
+
+$this->addFlash('success', "Le produit a bien été ajouté au panier");
+
+Mais sans le (FlashBagInterface $flashBag) grace à l'AbstractController.
+
+<h3>Refactoring Twig et inclusion de templates</h3>
+Mettre en fonction tout les Ajouté au panier sur les différentes pages.
+
+Home.html.twig
+
+<a href="{{ path('cart_add', {'id': p.id}) }}" class="btn btn-succes btn-sm">Ajouté</a>
+
+Dans _navbar.html.twig
+
+Mise en place de la connection sur le menu des categories
+
+<div class="collapse navbar-collapse" id="navbarColor03">
+	<ul class="navbar-nav me-auto">
+		{% for c in categoryRepository.findAll() %}
+			<li class="nav-item">
+				<a class="nav-link" href="{{ path('product_category', {'slug': c.slug}) }}">{{ c.name }}</a>
+			</li>
+		{% endfor %}
+	</ul>
+
+Dans category.html.twig nous ajoutons sur les différentes etiquette de produis la jonction ajout.
+
+<a href="{{ path('cart_add', {'id': p.id}) }}" class="btn btn-succes btn-sm">Ajouté</a>
+
+Mais dans les différentes page nous avont le même code que nous avons modifier.
+Donc pour éviter la redondance de code nous créons _product_card.html.twig
+Puis nous copions le code redondant.
+
+<div class="card">
+	<img src="{{ p.mainPicture }}" class="img-fluid" alt="Image du produit">
+	<div class="card-body">
+		<h4 class="card-title">{{ p.name }}
+			({{ p.price / 100 }}
+			&euro;)</h4>
+
+		<span class="badge badge-info bg-dark">
+			{{ p.category.name }}
+		</span>
+
+		<a href="#" class="btn btn-succes btn-sm">Stock:
+			{{ p.stock }}</a>
+
+		<p class="card-text">{{ p.shortDescription }}</p>
+		<a href="{{ path('product_show', {'category_slug': p.category.slug, 'slug':p.slug } ) }}" class="btn btn-primery btn-sm">
+			Dètails</a>
+		<a href="{{ path('cart_add', {'id': p.id}) }}" class="btn btn-succes btn-sm">Ajouté</a>
+
+	</div>
+</div>
+
+Aprés il suffit de remplacer le code dans les différentes page par: 
+Maintenant il devient accéssible pour d'autre page aussi.
+<div class="row">
+	{% for p in category.products %}
+		<div class="col-3">
+			{% include "product/_product_card.html.twig" %}
+		</div>
+	{% endfor %}
+</div>
+
+Si dans la boucle for de twig la variable est différente des autres variable ils est possible
+de la passée dans l'include avec un complément with {'p': product}.
+Exemple dans la home.html.twig
+<div class="row">
+	{% for product in products %}
+		<div class="col">
+			{% include "product/_product_card.html.twig" with {'p': product} %}
+		</div>
+	{% endfor %}
+</div>
+
+<h3>Afficher l'état du panier dans une page</h3>
+
+Creation de la route pour pouvoir afficher l'etat du panier. 
+Dans CartController.php
+
+    /**
+     * @Route("/cart", name="cart_show")
+     */
+    public function show(SessionInterface $session, ProductRepository $productRepository)
+    {
+        $detaileCart = [];
+
+        //[12 => ['product' => ..., 'quantity' => qté]]
+        //https://www.php.net/manual/fr/control-structures.foreach.php
+        // On affiche un tableau avec la session et on get le panier dans un tableau qui est associer avec l'$id 
+            du tableau et la quantitée.
+        foreach ($session->get('cart', []) as $id => $qty) {
+            $detaileCart[] = [
+                'product' => $productRepository->find($id), //affiche le produit
+                'qty' => $qty //affiche la quantité ajouté
+            ];
+        }
+
+        dd($detaileCart);
+
+        return $this->render('cart/index.html.twig', [
+            'items' => $detaileCart
+        ]);
+    }
+
+Integration du calcule total du panier dans CartController.php
+    /**
+     * @Route("/cart", name="cart_show")
+     */
+    public function show(SessionInterface $session, ProductRepository $productRepository)
+    {
+        $detaileCart = [];
+        $total = 0;
+
+        //[12 => ['product' => ..., 'quantity' => qté]]
+        foreach ($session->get('cart', []) as $id => $qty) {
+            $product = $productRepository->find($id);
+            $detaileCart[] = [
+                'product' => $product,
+                'qty' => $qty
+            ];
+
+            $total += ($product->getPrice() * $qty);
+        }
+
+        //dd($detaileCart);
+
+        return $this->render('cart/index.html.twig', [
+            'items' => $detaileCart,
+            'total' => $total
+        ]);
+    }
+
+Mise en place du template de cart index.html.twig
+
+{% extends 'base.html.twig' %}
+
+{% block title %}Votre panier
+{% endblock %}
+
+{% block body %}
+	<h1>Votre panier</h1>
+
+	<table class="table">
+		<thead>
+			<tr>
+				<th>Produit</th>
+				<th>Prix</th>
+				<th>Quantité</th>
+				<th>Total</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for item in items %}
+				<tr>
+					<td>
+						{{ item.product.name }}
+					</td>
+					<td>{{ item.product.price }}</td>
+					<td>{{ item.qty }}</td>
+					<td>{{ item.qty * item.product.price }}</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+		<tfoot>
+			<tr>
+				<td colspan="3">Total :</td>
+				<td>{{ total }}</td>
+			</tr>
+		</tfoot>
+	</table>
+{% endblock %}
+
+Mise en place dans _navbar.thml.twig de l'icone Panier et de c'est fonctionalité.
+
+<li class="nav-item">
+	<a href="{{ path('cart_show') }}" class="nav-link">
+		<i class="fas fa-shopping-cart"></i>
+		Panier
+	</a>
+</li>
+
+<h3>Premier récapitulatif</h3>
+Pour Obtenir la Session et travailler dessus ont utilise
+
+HttpFondation, la request ou la session.
+Ou on peu se faire livrer la SessionInterface avec l'ArgumentResolver dans une méthode liée à une Route.
+Mais on peu aussi de le faire livrée par le constructeur, par le contenaire dans le constructeurs de nos classes.
+L'organisation de la Session
+$session->set('nom', $valeur)
+$session->get('nom', 'defaut')
+Les informations sont rangées dans des bags en sac comme le FlashBag qui permet d'afficher des messages qui une fois 
+lue disparaisse. Permet de créer des notifications pour le navigateur.
+
+
+<h3>Refactoring : Créer un CartService qui embarque toute la gestion du panier</h3>
+
+Creation dans le dossier src un fichier CartService.php.
+
+Dans le quel nous allons créer la gestion du cart, le controller etant juste la pour contoler les infos
+et verifier que les élèment sont la et pouvoir les affichées sur le twig.
+
+<?php
+
+namespace App\Cart;
+
+use App\Repository\ProductRepository;
+use Symfony\Component\HttpFoundation\Session\SessionInterface;
+
+class CartService
+{
+    protected $session;
+    protected $productRepository;
+
+    public function __construct(SessionInterface $session, ProductRepository $productRepository)
+    {
+        $this->session = $session;
+        $this->productRepository = $productRepository;
+    }
+
+    public function add(int $id)
+    {
+        // 1. Retrouver le panier dans la session (sous forme de tableau) 
+        // 2. Si il n'existe pas encore, alors prendre un tableau vide
+        $cart = $this->session->get('cart', []);
+
+        // 3. Voir si le produit ($id) existe déjà dans le tableau [12 => 3, 29 => 2]
+        // 4. Si c'est le cas, simplement augmenter la quantité
+        // 5. Sinon, ajouter le produit avec la quantité 1
+        if (array_key_exists($id, $cart)) {
+            $cart[$id]++; //si le produit est déjà en panier il ajouterat +
+
+
+        } else {
+            $cart[$id] = 1; // Si le produit n'est pas dans le panier il metrat 1
+        }
+
+        // 6. Enregistrer le tableau mis à jour dans la session
+        $this->session->set('cart', $cart);
+    }
+    public function getTotal(): int
+    {
+        $total = 0;
+
+        foreach ($this->session->get('cart', []) as $id => $qty) {
+            $product = $this->productRepository->find($id);
+
+            $total += $product->getPrice() * $qty;
+        }
+
+        return $total;
+    }
+
+    public function getDetailedCartItems(): array
+    {
+        $detaileCart = [];
+
+
+        foreach ($this->session->get('cart', []) as $id => $qty) {
+            $product = $this->productRepository->find($id);
+            $detaileCart[] = [
+                'product' => $product,
+                'qty' => $qty
+            ];
+        }
+
+        return $detaileCart;
+    }
+}
+
+Maintenant le CartController.php utilise l'appel au CartService pour le fonctionnement.
+
+<?php
+
+namespace App\Controller;
+
+use App\Cart\CartService;
+use App\Repository\ProductRepository;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\HttpFoundation\Session\SessionInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+
+class CartController extends AbstractController
+{
+
+    /**
+     * //requirements={"id":"\d+"} permet d'imposé l'appel d'un nombre.
+     * @Route("/cart/add/{id}", name="cart_add", requirements={"id":"\d+"})
+     */
+    public function add($id, ProductRepository $productRepository, CartService $cartService): Response
+    {
+
+        // 0. Securisation: est-ce que le produit existe ?
+        $product = $productRepository->find($id);
+
+
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit $id n'existe pas !");
+        }
+
+        $cartService->add($id);
+
+        $this->addFlash('success', "Le produit a bien été ajouté au panier");
+
+        // Supression de cart
+        //$request->getSession()->remove('cart');
+
+        return $this->redirectToRoute('product_show', [
+            'category_slug' => $product->getCategory()->getSlug(),
+            'slug' => $product->getSlug()
+        ]);
+    }
+
+    /**
+     * @Route("/cart", name="cart_show")
+     */
+    public function show(CartService $cartService)
+    {
+
+
+        $detaileCart = $cartService->getDetailedCartItems();
+
+        $total = $cartService->getTotal();
+
+        return $this->render('cart/index.html.twig', [
+            'items' => $detaileCart,
+            'total' => $total
+        ]);
+    }
+}
+
+<h3>Refactoring : créer une classe qui représente un élément du panier</h3>
+
+Creation dans le dossier src un fichier CartItem.php
+Dans se fichier nous gérerons le total calculé. Mais l'avantage est que grace à cette amelioration 
+nous pouvons géré d'autre chose comme les bons de reduction ......
+
+<?php
+
+namespace App\Cart;
+
+use App\Entity\Product;
+
+class CartItem
+{
+    public $product;
+    public $qty;
+
+    public function __construct(Product $product, int $qty)
+    {
+        $this->product = $product;
+        $this->qty = $qty;
+    }
+
+    public function getTotal(): int
+    {
+        return $this->product->getPrice() * $this->qty;
+    }
+}
+
+Puis dans le dossier templates->cart du index.html.
+
+{% extends 'base.html.twig' %}
+
+{% block title %}Votre panier
+{% endblock %}
+
+{% block body %}
+	<h1>Votre panier</h1>
+
+	<table class="table">
+		<thead>
+			<tr>
+				<th>Produit</th>
+				<th>Prix</th>
+				<th>Quantité</th>
+				<th>Total</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for item in items %}
+				<tr>
+					<td>
+						{{ item.product.name }}
+					</td>
+					<td>{{ item.product.price }}</td>
+					<td>{{ item.qty }}</td>
+                    // Plus aucun calcule dans le fichier twig il suffit d'appeler item.total
+					<td>{{ item.total }}</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+		<tfoot>
+			<tr>
+				<td colspan="3">Total :</td>
+				<td>{{ total }}</td>
+			</tr>
+		</tfoot>
+	</table>
+{% endblock %}
+
+<h3>Rendre le CartService disponible dans nos templates Twig</h3>
+
+Pour rendre CartService disponible partout il suffit de le déclaré dans le twig.yaml du dossier config->packages.
+
+twig:
+    default_path: "%kernel.project_dir%/templates"
+    form_themes:
+        - bootstrap_4_layout.html.twig
+    globals:
+        categoryRepository: "@App\\Repository\\CategoryRepository"
+        cartService: "@App\\Cart\\CartService"
+
+
+Maintenant nous pouvons l'utilisé ou on le souhaite comme dans la _navbar.html.twig
+
+<ul class="navbar-nav">
+	<li class="nav-item">
+		<a href="{{ path('cart_show') }}" class="nav-link">
+			<i class="fas fa-shopping-cart"></i>
+            //utilisation du cartService pour afficher le total du panier
+			Panier ({{ cartService.total }})
+		</a>
+	</li>
+
+<h3>Finalisations : incrémenter, décrémenter, supprimer les éléments du panier</h3>
+
+Dans le CartController.php nous allons créer des routes pour incrémenter, décrémenter, supprimer 
+les éléments du panier
+
+    /**
+     * //Supression du product "\d+" retourne un nombre
+     *
+     * @Route("/cart/delete/{id}", name="cart_delete", requirements={"id": "\d+"})
+     */
+    public function delete($id, ProductRepository $productRepository, CartService $cartService)
+    {
+        $product = $productRepository->find($id);
+        //Si le produit n'existe pas alors il retourne un message.
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit $id n'existe pas et ne peut pas être suprimé ! ");
+        }
+        //Supression du produis
+        $cartService->remove($id);
+        //Message de success quand la suppression à bien était realisée
+        $this->addFlash("success", "Le produit a bien été suprimé du panier");
+        //Une fois terminé il retourne à la route carte_show.
+        return $this->redirectToRoute("cart_show");
+    }
+Dans le CartService.php cration de la function de supression du produit.
+La fonction var verifier que le produit existe et elle vas le suprimer.
+
+public function remove(int $id)
+    {
+        //On vas recupérer un cart dans la session et si il n'y a rien tu retourne un tableau vide.
+        $cart = $this->session->get('cart', []);
+        //supression du produit de la cart id
+        unset($cart[$id]);
+        //Maintenant on veux le mettre à jour dans la session
+        $this->session->set('cart', $cart);
+    }
+
+Dans l'index.html.twig de cart nous devons rajouter un <th></th>
+et le boutons pour la supression.
+
+<td>
+    //On demande d'afficher la route cart_delete et l'identifiant du produit que l'on veux supprimer.
+	<a href="{{ path("cart_delete", {'id': item.product.id}) }}" class="btn btn-sm btn-danger">
+		<i class="fas fa-trash"></i>
+	</a>
+</td>
+
+Dans le CartController.php nous allons créer des routes pour décrémenter
+
+    /**
+     * //Decrementation du produit
+     * 
+     * @Route("/cart/decrement/{id}", name="cart_decrement", requirements={"id": "\d+"})
+     */
+    public function decrement($id, cartService $cartService, ProductRepository $productRepository)
+    {
+
+        $product = $productRepository->find($id);
+
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit $id n'existe pas et ne peut pas être décrémenté ! ");
+        }
+
+        $cartService->decrement($id);
+
+        $this->addFlash("success", "Le produit a bien été décrémenté");
+
+        return $this->redirectToRoute("cart_show");
+    }
+}
+
+Dans le CartService.php cration de la function de decrement du produit.
+
+public function decrement(int $id)
+    {
+
+        $cart = $this->session->get('cart', []);
+
+        // Si le produit n'exite pas il n'y rien à faire.
+        if (!array_key_exists($id, $cart)) {
+            return;
+        }
+
+        //soit le produit est à 1 ,alors il faut simplement le suprimer
+        if ($cart[$id] === 1) {
+            $this->remove($id);
+            return;
+        }
+
+        //soit le produit est à plus de 1, alors il faut décrémenter
+        $cart[$id]--;
+
+        //Maintenant on veux le mettre à jour dans la session
+        $this->session->set('cart', $cart);
+    }
+
+Dans l'index.html.twig de cart nous devons rajouter deux boutons pour la + et -.
+{% extends 'base.html.twig' %}
+
+{% block title %}Votre panier
+{% endblock %}
+
+{% block body %}
+	<h1>Votre panier</h1>
+	{% if items | length > 0 %}
+		<table class="table">
+			<thead>
+				<tr>
+					<th>Produit</th>
+					<th>Prix</th>
+					<th>Quantité</th>
+					<th>Total</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for item in items %}
+					<tr>
+						<td>
+							{{ item.product.name }}
+						</td>
+						<td>{{ item.product.price }}</td>
+                        //Creation des boutons + et -mise en place de ?returnToCart=true permetra de revenir à notre panier.
+						<td>
+							<a href="{{ path("cart_add", {'id': item.product.id}) }}?returnToCart=true" class="btn btn-sm btn-primary">
+								<i class="fas fa-plus"></i>
+							</a>
+							{{ item.qty }}
+							<a href="{{ path("cart_decrement", {'id': item.product.id}) }}" class="btn btn-sm btn-primary">
+								<i class="fas fa-minus"></i>
+							</a>
+						</td>
+						<td>{{ item.total }}</td>
+						<td>
+							<a href="{{ path("cart_delete", {'id': item.product.id}) }}" class="btn btn-sm btn-danger">
+								<i class="fas fa-trash"></i>
+							</a>
+						</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+			<tfoot>
+				<tr>
+					<td colspan="3">Total :</td>
+					<td colspan="2">{{ total }}</td>
+				</tr>
+			</tfoot>
+		</table>
+	{% else %}
+		<h2>Le panier est vide !</h2>
+	{% endif %}
+{% endblock %}
+
+Donc dans CartController.php integration de l'exception returnToCart.
+
+    /**
+     * //requirements={"id":"\d+"} permet d'imposé l'appel d'un nombre.
+     * @Route("/cart/add/{id}", name="cart_add", requirements={"id":"\d+"})
+     */
+    public function add($id, ProductRepository $productRepository, CartService $cartService, Request $request): Response
+    {
+
+        // 0. Securisation: est-ce que le produit existe ?
+        $product = $productRepository->find($id);
+
+
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit $id n'existe pas !");
+        }
+
+        $cartService->add($id);
+
+        $this->addFlash('success', "Le produit a bien été ajouté au panier");
+
+        // Supression de cart
+        //$request->getSession()->remove('cart');
+
+        //Si dans l'url il y a un point d'interogation returnToCart 
+        if ($request->query->get('returnToCart')) {
+            //alors ont sera rediriger sur cart_show
+            return $this->redirectToRoute("cart_show");
+        }
+        //Mais si je n'ai pas l'information je retourne ici
+        return $this->redirectToRoute('product_show', [
+            'category_slug' => $product->getCategory()->getSlug(),
+            'slug' => $product->getSlug()
+        ]);
+    }
+
+Creation du message si il n'y a pas de produit dans l'index.html.twig de cart.
+
+{% extends 'base.html.twig' %}
+
+{% block title %}Votre panier
+{% endblock %}
+
+{% block body %}
+	<h1>Votre panier</h1>
+    // dans le items on le fait passer dans le filtre length et supperieur à zero.
+	{% if items | length > 0 %}
+		<table class="table">
+			<thead>
+				<tr>
+					<th>Produit</th>
+					<th>Prix</th>
+					<th>Quantité</th>
+					<th>Total</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for item in items %}
+					<tr>
+						<td>
+							{{ item.product.name }}
+						</td>
+						<td>{{ item.product.price }}</td>
+						<td>
+							<a href="{{ path("cart_add", {'id': item.product.id}) }}?returnToCart=true" class="btn btn-sm btn-primary">
+								<i class="fas fa-plus"></i>
+							</a>
+							{{ item.qty }}
+							<a href="{{ path("cart_decrement", {'id': item.product.id}) }}" class="btn btn-sm btn-primary">
+								<i class="fas fa-minus"></i>
+							</a>
+						</td>
+						<td>{{ item.total }}</td>
+						<td>
+							<a href="{{ path("cart_delete", {'id': item.product.id}) }}" class="btn btn-sm btn-danger">
+								<i class="fas fa-trash"></i>
+							</a>
+						</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+			<tfoot>
+				<tr>
+					<td colspan="3">Total :</td>
+					<td colspan="2">{{ total }}</td>
+				</tr>
+			</tfoot>
+		</table>
+        //Sinon on affiche le message suivant.
+	{% else %}
+		<h2>Le panier est vide !</h2>
+	{% endif %}
+{% endblock %}
+
+<h3>Refactoring du CartService</h3>
+Dans le CartController.php il est encore possible de faire du refactoring.
+Pour reduire l'appel sur chaque function de ProductRepository $productRepository, CartService $cartService.
+Il faut créer un constructeur .
+
+<?php
+
+namespace App\Controller;
+
+use App\Cart\CartService;
+use App\Repository\ProductRepository;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\HttpFoundation\Session\SessionInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
+
+class CartController extends AbstractController
+{
+    //appel de ProductRepository et CartService.
+    /**
+     * @var ProductRepository
+     */
+    protected $productRepository;
+
+    /**
+     * @var CartService
+     */
+    protected $cartService;
+
+    public function __construct(ProductRepository $productRepository, CartService $cartService)
+    {
+        $this->productRepository = $productRepository;
+        $this->cartService = $cartService;
+    }
+
+    /**
+     * //requirements={"id":"\d+"} permet d'imposé l'appel d'un nombre.
+     * @Route("/cart/add/{id}", name="cart_add", requirements={"id":"\d+"})
+     */
+    public function add($id, Request $request): Response
+    {
+
+        // 0. Securisation: est-ce que le produit existe ?
+        $product = $this->productRepository->find($id);
+
+
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit $id n'existe pas !");
+        }
+
+        $this->this->cartService->add($id);
+
+        $this->addFlash('success', "Le produit a bien été ajouté au panier");
+
+        // Supression de cart
+        //$request->getSession()->remove('cart');
+
+        //Si dans l'url il y a un point d'interogation returnToCart 
+        if ($request->query->get('returnToCart')) {
+            //alors ont sera rediriger sur cart_show
+            return $this->redirectToRoute("cart_show");
+        }
+
+        return $this->redirectToRoute('product_show', [
+            'category_slug' => $product->getCategory()->getSlug(),
+            'slug' => $product->getSlug()
+        ]);
+    }
+
+    /**
+     * @Route("/cart", name="cart_show")
+     */
+    public function show()
+    {
+
+
+        $detaileCart = $this->cartService->getDetailedCartItems();
+
+        $total = $this->cartService->getTotal();
+
+        return $this->render('cart/index.html.twig', [
+            'items' => $detaileCart,
+            'total' => $total
+        ]);
+    }
+
+    /**
+     * //Supression du product
+     *
+     * @Route("/cart/delete/{id}", name="cart_delete", requirements={"id": "\d+"})
+     */
+    public function delete($id)
+    {
+        $product = $this->productRepository->find($id);
+
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit $id n'existe pas et ne peut pas être suprimé ! ");
+        }
+
+        $this->cartService->remove($id);
+
+        $this->addFlash("success", "Le produit a bien été suprimé du panier");
+
+        return $this->redirectToRoute("cart_show");
+    }
+
+    /**
+     * //Decrementation du produit
+     * 
+     * @Route("/cart/decrement/{id}", name="cart_decrement", requirements={"id": "\d+"})
+     */
+    public function decrement($id)
+    {
+
+        $product = $this->productRepository->find($id);
+
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit $id n'existe pas et ne peut pas être décrémenté ! ");
+        }
+
+        $this->cartService->decrement($id);
+
+        $this->addFlash("success", "Le produit a bien été décrémenté");
+
+        return $this->redirectToRoute("cart_show");
+    }
+}
+
+refactoring
+Pour le CratService.php creation de la fonction function getCart() et saveCart(array $cart)
+
+    //GetCart nous revois un tableau
+    protected function getCart(): array
+    {
+        //queque ma session me retourne en get un tableau vide.
+        return $this->session->get('cart', []);
+    }
+    //Setcart qui recevera un tableau $cart
+    protected function saveCart(array $cart)
+    {
+        //Qui retourne dans la session un tableau $cart
+        $this->session->set('cart', $cart);
+    }
+
+Cela permet d'eviter des repetion dans les lignes maintenant on peu appeler directement.
+$cart = $this->getCart(); et $this->saveCart($cart);
+public function add(int $id)
+    {
+        // 1. Retrouver le panier dans la session (sous forme de tableau) 
+        // 2. Si il n'existe pas encore, alors prendre un tableau vide
+        $cart = $this->getCart();
+
+        // 3. Voir si le produit ($id) existe déjà dans le tableau [12 => 3, 29 => 2]
+        // 4. Si c'est le cas, simplement augmenter la quantité
+        // 5. Sinon, ajouter le produit avec la quantité 1
+        if (array_key_exists($id, $cart)) {
+            $cart[$id]++; //si le produit est déjà en panier il ajouterat +
+
+
+        } else {
+            $cart[$id] = 1; // Si le produit n'est pas dans le panier il metrat 1
+        }
+
+        // 6. Enregistrer le tableau mis à jour dans la session
+        $this->saveCart($cart);
+    }
+
+    public function getDetailedCartItems(): array
+    {
+        $detaileCart = [];
+
+
+        foreach ($this->getCart() as $id => $qty) {
+            $product = $this->productRepository->find($id);
+
+            //Si un produit à était suprimé, il continurat la boucle.
+            if (!$product) {
+                continue;
+            }
+
+            $detaileCart[] = new CartItem($product, $qty);
+        }
+
+        return $detaileCart;
+    }
+
+Pour eviter d'utiliser le else du if dans le CartService.php, nous pouvont encore simplifier.
+
+public function add(int $id)
+    {
+        // 1. Retrouver le panier dans la session (sous forme de tableau) 
+        // 2. Si il n'existe pas encore, alors prendre un tableau vide
+        $cart = $this->getCart();
+
+        //attention si sa n'existe pas il reste a zero
+        if (!array_key_exists($id, $cart)) {
+            $cart[$id] = 0; //si le produit est déjà en panier il ajouterat +
+
+        }
+        //Si il exite il passera au nombre superieur.
+        $cart[$id]++; // Si le produit n'est pas dans le panier il metrat 1
+        
+
+        // 6. Enregistrer le tableau mis à jour dans la session
+        $this->saveCart($cart);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
