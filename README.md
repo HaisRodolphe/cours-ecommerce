@@ -4534,7 +4534,22 @@ public function add(int $id)
         $this->saveCart($cart);
     }
 
+<h3>📖 Conclusion</h3>
+Comment recupérérer la session ? Via le HttpFondation, la Request on aura accés à la session.
+Ont peu aussi se le faire livrée dans un controller ou dans une classe au niveau du constructeur.
 
+SessionInterface
+-Par l'ArgumentResolver dans un méthode liée à une Route.
+-Par le Container dans vos constructeurs.
+Les sessions sont livréer par différent Bags, les information sont rangées dans des Bags.
+_sf2_attributes (attributes) on n'y range les donées et le bags des flashes pour posé des messages de notification au utilisateur.
+
+Refactoring et POO
+Redistribuer les responsabilités entre différents acteurs
+-CartService
+-CarteItem
+
+<h2>Commandes : Doctrine et ManyToMany (1 heure et 45 minutes)</h2>
 
 
 
