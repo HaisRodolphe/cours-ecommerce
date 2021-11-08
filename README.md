@@ -4550,16 +4550,2200 @@ Redistribuer les responsabilités entre différents acteurs
 -CarteItem
 
 <h2>Commandes : Doctrine et ManyToMany (1 heure et 45 minutes)</h2>
+Etudions les associations "complexes" de doctrine. Des relation de plurieur à plusieur.
+Dans cette partie nous allons traitait les relations de plusieur à plusieur.
+ManyToMany, créer l'entity "Purchase".
+Voir quelles informations ? à quelles autre entityté elle est relier ou associer ?
+Nous allons faire une revision et voir avec quelle outil nous allons utilisé dans le contenaire de sevice.
+Ainsi prendre les bonne pratique du code pour eviter une trop grande quantité de code.
+Essayons de tendre vers un code propre et maintenable en différente class.
+
+<h3>Créer l'entité Purchase (commande)</h3>
+php bin/console make:entity Purchase
+Entity generated! Now let's add some fields!
+ You can always add more fields later manually or by re-running this command.
+
+ New property name (press <return> to stop adding fields):
+ > FullName
+
+ Field type (enter ? to see all types) [string]:
+ > 
 
 
+ Field length [255]:
+ >
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ > 
+
+ updated: src/Entity/Purchase.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > address
+
+ Field type (enter ? to see all types) [string]:
+ >
 
 
+ Field length [255]:
+ >
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/Purchase.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > postalCode
+
+ Field type (enter ? to see all types) [string]:
+ >
 
 
+ Field length [255]:
+ >
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/Purchase.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > city
+
+ Field type (enter ? to see all types) [string]:
+ >
 
 
+ Field length [255]:
+ >
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/Purchase.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > total
+
+ Field type (enter ? to see all types) [string]:
+ > integer
+intege
+r
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/Purchase.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > status
+
+ Field type (enter ? to see all types) [string]:
+ >
 
 
+ Field length [255]:
+ >
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/Purchase.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > user
+
+ Field type (enter ? to see all types) [string]:
+ > ?
+?
+
+Main types
+  * string
+  * text
+  * boolean
+  * integer (or smallint, bigint)
+  * float
+
+Relationships / Associations
+  * relation (a wizard will help you build the relation)
+  * ManyToOne
+  * OneToMany
+  * ManyToMany
+  * OneToOne
+
+Array/Object Types
+  * array (or simple_array)
+  * json
+  * object
+  * binary
+  * blob
+
+Date/Time Types
+  * datetime (or datetime_immutable)
+  * datetimetz (or datetimetz_immutable)
+  * date (or date_immutable)
+  * time (or time_immutable)
+  * dateinterval
+
+Other Types
+  * ascii_string
+  * decimal
+  * guid
+  * json_array
+
+
+ Field type (enter ? to see all types) [string]:
+ > ManyToOne
+ManyToOne
+;49m
+ What class should this entity be related to?:
+ > User
+User
+
+ Is the Purchase.user property allowed to be null (nullable)? (yes/no) [yes]:
+ >
+
+ Do you want to add a new property to User so that you can access/update Purchase objects from it -
+ e.g. $user->getPurchases()? (yes/no) [yes]:
+ > 
+
+ A new property will also be added to the User class so that you can access the related Purchase objects from it.
+
+ New field name inside User [purchases]:
+ >
+
+ updated: src/Entity/Purchase.php
+
+Dans l'entity Purchase.php nous modifions le status pour que quand il n'est pas renseigner.
+
+class Purchase
+{
+    //Pour eviter de chercher les différent status dans les codes,
+    //nous creont deux public const.
+    public const STATUS_PENDING = 'PENDING';
+    public const STATUS_PAID = 'PAID';
+
+    /**
+     * @ORM\Column(type="string", length=255)
+     */
+    private $status = 'PENDING';
+    //On rajoute pending quand le status n'est pas renseigner il sera en attente.
+
+Mise en place de la datafixtures dans AppFixtures.php
+Pour la creation des différentes commande en automatique.
+
+        // Creation d'un tableau vide Users pour le purchase
+        $users = [];
+
+        //Boucle for si $u = 0 et si $u < 5 alors tu fais $u++
+        for ($u = 0; $u < 5; $u++) {
+            $user = new User();
+
+            $hash = $this->encoder->encodePassword($user, "passeword");
+
+            $user->setEmail("user$u@gmail.com")
+                ->setFullName($faker->name())
+                ->setPassword($hash);
+
+            // A chaque fois que je vais faire une boucle je vais rajouter 5 user au tableau
+            $users[] = $user;
+
+            $manager->persist($user);
+        }
+
+        for ($p = 0; $p < mt_rand(20, 40); $p++) {
+            $purchase = new Purchase;
+
+            $purchase->setFullName($faker->name)
+                ->setAddress($faker->streetAddress)
+                ->setPostalCode($faker->postcode)
+                ->setCity($faker->city)
+                ->setUser($faker->randomElement($users))
+                ->setTotal(mt_rand(2000, 30000));
+
+            if ($faker->boolean(90)) {
+                $purchase->setStatus(Purchase::STATUS_PAID);
+            }
+
+            $manager->persist($purchase);
+        }
+Injection de la fixture. 
+php bin/console d:f:l --no-interaction
+
+<h3>Afficher la liste des commandes d'un utilisateur</h3>
+
+Creation dans template du dossier purchase et fichier index.html.twig   
+
+{% extends "base.html.twig" %}
+
+{% block title %}
+	Mes commandes
+{% endblock %}
+
+{% block body %}
+	<h1>Mes commandes</h1>
+
+	<table class="table">
+		<thead>
+			<tr>
+				<th>Numéro</th>
+				<th>Adresse</th>
+				<th>Date de commande</th>
+				<th>Total</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for p in purchases %}
+				<tr>
+					<td>
+						{{ p.id }}
+					</td>
+					<td>
+						{{ p.address }}<br>{{ p.postalCode }},
+						{{ p.city }}
+					</td>
+					<td>TODO</td>
+					<td>{{ p.total / 100 }}
+						€
+					</td>
+				</tr>
+			{% endfor %}
+
+		</tbody>
+	</table>
+{% endblock %}
+
+Mise en place dans la _navbar.html.twig.
+
+<li class="nav-item">
+	<a herf="#" class="nav-link">Mes commandes</a>
+</li>
+
+
+Pour une bonne pratique nous allons créer dans le dossier controller un dossier Purchase 
+puis un fichier PurchaseListController.php qui permetrat de gére les commandes
+Dans un premier temp créer le controller pour afficher la liste des commandes.
+Petit revision sur le fonctionnement.
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use Twig\Environment;
+
+use Symfony\Component\Security\Core\Security;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\RouterInterface;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
+
+class PurchasesListController extends AbstractController
+{
+    protected $security;
+    protected $router;
+    protected $twig;
+
+    public function __construct(Security $security, RouterInterface $router, Environment $twig)
+    {
+        $this->security = $security;
+        $this->router = $router;
+        $this->twig = $twig;
+    }
+
+    /**
+     * @Route("/purchases", name="purchase_index")
+     */
+    public function index()
+    {
+        //1.Nous devons nous assurer que la personne est connectée (sinon retour à la page d'acceuil).->Security
+
+        /** @var User */
+        $user = $this->security->getUser();
+
+        if (!$user) {
+            //Redirction -> RedirectResponse
+            //Générer une URL en fontion du nom d'une route ->UrlGeneratorInterface ou le RouterInterface
+            //$url = $this->router->generate('homepage');
+            //return new RedirectResponse($url);
+            throw new AccessDeniedException("Vous devez être connecté pour accéder à vos commandes");
+        }
+        //2. Nous voulons savoir qui est connecter.->Security
+
+        //3. Nous voulons passer l'utilisateur connecté à twig afin d'afficher ces commande. Environement de Twig/Response
+        $html = $this->twig->render('purchase/index.html.twig', [
+            'purchases' => $user->getPurchases()
+        ]);
+
+        return new Response($html);
+    }
+}
+
+<h3>Ajouter une date de commande et gérer les problèmes de migration</h3>
+
+php bin/console make:entity Purchase
+
+ Your entity already exists! So let's add some new fields!
+
+//Le faite de rajouté At a purchase, il est detecter un date time.
+
+ New property name (press <return> to stop adding fields):
+ > purchasedAt
+
+ Field type (enter ? to see all types) [datetime_immutable]:
+ > 
+
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/Purchase.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+
+Suite à une erreur lors de la migration car des donnée sont déjà existante dans la bdd.
+Car il ne peu prendre de date null.
+
+php bin/console doctrine:migrations:migrate
+
+ WARNING! You are about to execute a migration in database "symshop" that could result in schema changes and data loss. Are you sure you wish to continue? (yes/no) [yes]:
+ > yes
+
+[notice] Migrating up to DoctrineMigrations\Version20211103172945
+[error] Migration DoctrineMigrations\Version20211103172945 failed during Execution. Error: "An exception occurred while executing 'ALTER TABLE purchase ADD purchase_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)'':
+
+SQLSTATE[22007]: Invalid datetime format: 1292 Incorrect datetime value: '0000-00-00 00:00:00' for column 'purchase_at' at row 1"
+
+In AbstractMySQLDriver.php line 128:
+                                                                                                                                          
+  An exception occurred while executing 'ALTER TABLE purchase ADD purchase_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)'':        
+                                                                                                                                          
+  SQLSTATE[22007]: Invalid datetime format: 1292 Incorrect datetime value: '0000-00-00 00:00:00' for column 'purchase_at' at row 1              
+                                                                                                                        
+In Exception.php line 18:
+
+  SQLSTATE[22007]: Invalid datetime format: 1292 Incorrect datetime value: '0000-00-00 00:00:00' for column 'purchase_at' at row 1  
+
+In PDOConnection.php line 132:
+
+  SQLSTATE[22007]: Invalid datetime format: 1292 Incorrect datetime value: '0000-00-00 00:00:00' for column 'purchase_at' at row 1  
+
+doctrine:migrations:migrate [--write-sql [WRITE-SQL]] [--dry-run] [--query-time] [--allow-no-migration] [--all-or-nothing [ALL-OR-NOTHING]] [--configuration CONFIGURATION] [--em EM] [--conn CONN] [-h|--help] [-q|--quiet] [-v|vv|vvv|--verbose] [-V|--version] [--ansi] [--no-ansi] [-n|--no-interaction] [-e|--env ENV] [--no-debug] [--] <command> [<version>]
+
+Il faut modifier le fichier de migration Version20211103172945.
+Pour qu'il puisse méttre à jour la base existante et revenir a des date non null.
+
+/**
+ * Auto-generated Migration: Please modify to your needs!
+ */
+final class Version20211103172945 extends AbstractMigration
+{
+    public function getDescription(): string
+    {
+        return '';
+    }
+
+    public function up(Schema $schema): void
+    {
+        // this up() migration is auto-generated, please modify it to your needs
+        $this->addSql('ALTER TABLE purchase ADD purchased_at DATETIME NOT NULL');
+        //Mise à jours de la base de donné déjà intégrer.
+        $this->addSql('UPDATE purchase SET purchased_at = NOW()');
+        //Mise en place de la base de donné avec le date time no null.
+        $this->addSql('ALTER TABLE purchase MODIFY purchased_at DATETIME NOT NULL');
+    }
+
+Maintenant dans la table purchase il y a bien les dates et les dates seront en NOT NULL.
+
+Dans le dataFixtures du fichier AppFixtures.php il faut metre en place le dateTime.
+
+        for ($p = 0; $p < mt_rand(20, 40); $p++) {
+            $purchase = new Purchase;
+
+            $purchase->setFullName($faker->name)
+                ->setAddress($faker->streetAddress)
+                ->setPostalCode($faker->postcode)
+                ->setCity($faker->city)
+                ->setUser($faker->randomElement($users))
+                ->setTotal(mt_rand(2000, 30000));
+                ->setPurchasedAt($faker->dateTimeBetween('-6 months'));
+
+            if ($faker->boolean(90)) {
+                $purchase->setStatus(Purchase::STATUS_PAID);
+            }
+
+            $manager->persist($purchase);
+        }
+
+Migration de la fixture.
+php bin/console d:f:l --no-interaction
+
+Mise en place de purchasedAt dans le dossier purchase du fichier index.html.twig
+
+        <tbody>
+			{% for p in purchases %}
+				<tr>
+					<td>
+						{{ p.id }}
+					</td>
+					<td>
+						{{ p.address }}<br>{{ p.postalCode }},
+						{{ p.city }}
+					</td>
+					<td>
+						{{ p.purchasedAt | date('d/m/y H:i') }}
+					</td>
+					<td>{{ p.total / 100 }}
+						€
+					</td>
+				</tr>
+			{% endfor %}
+
+		</tbody>
+
+<h3>Relation ManyToMany entre Purchase et Product<h3>
+Creation d'un listing des commandes qui sont lier à des produits
+Creation de la relation entre Product et Purchase.
+php bin/console make:entity Purchase
+
+ Your entity already exists! So let's add some new fields!
+
+ New property name (press <return> to stop adding fields):
+ > products
+
+ Field type (enter ? to see all types) [string]:
+ > ManyToMany
+ManyToOne
+Many
+
+ What class should this entity be related to?:
+ > product
+product
+
+ Do you want to add a new property to product so that you can access/update Purchase objects from it - e.g
+. $product->getPurchases()? (yes/no) [yes]:
+ > 
+ 
+ A new property will also be added to the product class so that you can access the related Purchase objects from it.
+
+ >
+ updated: src/Entity/Purchase.php
+ updated: src/Entity/Product.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ >        
+  Success! 
+
+Cela a créer dans les entity Product et Purchase
+
+Product
+
+    /**
+     * @ORM\ManyToMany(targetEntity=Purchase::class, mappedBy="products")
+     */
+    private $purchases;
+
+    public function __construct()
+    {
+        $this->purchases = new ArrayCollection();
+    }
+
+ Purchase
+
+    /**
+     * @ORM\ManyToMany(targetEntity=product::class, inversedBy="purchases")
+     */
+    private $products;
+
+Avec tout leurs sevices get et set.    
+
+Une fois la migration Version20211103192450.php effectuer, 
+
+Il créer une table purchase_product
+
+Mise en place de la fixture dans l'AppFicture.php 
+
+//Creation d'un tableau vide $products.
+$products = [];
+
+        //Creation de 3 category avec trois nom au hasart.
+        for ($c = 0; $c < 3; $c++) {
+            $category = new Category;
+            $category->setName($faker->department)
+                ->setSlug(strtolower($this->slugger->slug($category->getName())));
+
+            $manager->persist($category);
+
+            //creer une boucle.
+            for ($p = 0; $p < mt_rand(15, 20); $p++) {
+                //integration des données à créer.
+                $product = new Product;
+                $product->setName($faker->productName)
+                    ->setPrice($faker->price(4000, 20000))
+                    //strtolower conversion en majuscule
+                    ->setSlug(strtolower($this->slugger->slug($product->getName())))
+                    ->setStock(mt_rand(0, 10))
+                    ->setCategory($category)
+                    ->setShortDescription($faker->paragraph())
+                    ->setMainPicture($faker->imageUrl(400, 400, true));
+
+                //et a chaque nouveau produit rajouter dans $products 
+                $products[] = $product;
+
+                // je persit 100 produit
+                $manager->persist($product);
+            }
+        }
+
+        for ($p = 0; $p < mt_rand(20, 40); $p++) {
+            $purchase = new Purchase;
+
+            $purchase->setFullName($faker->name)
+                ->setAddress($faker->streetAddress)
+                ->setPostalCode($faker->postcode)
+                ->setCity($faker->city)
+                ->setUser($faker->randomElement($users))
+                ->setTotal(mt_rand(2000, 30000))
+                ->setPurchasedAt($faker->dateTimeBetween('-6 months'));
+
+            //je vais allé chercher une selection de produit et avec faker je veux aller recupérer plusieur élèment
+             et aller chercher au asart 3 à 5 produit.
+            $selectedProducts = $faker->randomElements($products, mt_rand(3, 5));
+            //pour chacun des $selectedProducts de product.
+            foreach ($selectedProducts as $product) {
+                $purchase->addProduct($product);
+            }
+
+
+            if ($faker->boolean(90)) {
+                $purchase->setStatus(Purchase::STATUS_PAID);
+            }
+
+            $manager->persist($purchase);
+        }
+
+Dans l'index.html.twig de purchase.
+
+{% block body %}
+	<h1>Mes commandes</h1>
+
+	<table class="table">
+		<thead>
+			<tr>
+				<th>Numéro</th>
+				<th>Adresse</th>
+				<th>Date de commande</th>
+                //rajout de produit
+				<th>Produits</th>
+				<th>Total</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for p in purchases %}
+				<tr>
+					<td>
+						{{ p.id }}
+					</td>
+					<td>
+						{{ p.address }}<br>{{ p.postalCode }},
+						{{ p.city }}
+					</td>
+					<td>
+						{{ p.purchasedAt | date('d/m/y H:i') }}
+					</td>
+                    //creation du td de pour afficher la liste de produit.
+					<td>
+						<ul>
+							{% for product in p.products %}
+								<li>
+									{{ product.name }}
+									({{ product.price / 100 }}
+									€)</li>
+							{% endfor %}
+						</ul>
+					</td>
+					<td>{{ p.total / 100 }}
+						€
+					</td>
+				</tr>
+			{% endfor %}
+
+		</tbody>
+	</table>
+{% endblock %}
+
+<h3>Refactoring de la liste de commandes</h3>
+
+Pour le PurchasesListController.php il y a plus simple pour acceder au donné.
+Ancien PurchasesListController.php
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use Twig\Environment;
+
+use Symfony\Component\Security\Core\Security;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\RouterInterface;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
+
+class PurchasesListController extends AbstractController
+{
+    protected $security;
+    protected $router;
+    protected $twig;
+
+    public function __construct(Security $security, RouterInterface $router, Environment $twig)
+    {
+        $this->security = $security;
+        $this->router = $router;
+        $this->twig = $twig;
+    }
+
+    /**
+     * @Route("/purchases", name="purchase_index")
+     */
+    public function index()
+    {
+        //1.Nous devons nous assurer que la personne est connectée (sinon retour à la page d'acceuil).->Security
+
+        /** @var User */
+        $user = $this->security->getUser();
+
+        if (!$user) {
+            //Redirction -> RedirectResponse
+            //Générer une URL en fontion du nom d'une route ->UrlGeneratorInterface ou le RouterInterface
+            //$url = $this->router->generate('homepage');
+            //return new RedirectResponse($url);
+            throw new AccessDeniedException("Vous devez être connecté pour accéder à vos commandes");
+        }
+        //2. Nous voulons savoir qui est connecter.->Security
+
+        //3. Nous voulons passer l'utilisateur connecté à twig afin d'afficher ces commande. Environement de Twig/Response
+        $html = $this->twig->render('purchase/index.html.twig', [
+            'purchases' => $user->getPurchases()
+        ]);
+
+        return new Response($html);
+    }
+}
+
+En utilisant l'AbstractController nous n'avon pas besion de grand chose pour faire la méme 
+mécanique.
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use Symfony\Component\Routing\Annotation\Route;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+
+class PurchasesListController extends AbstractController
+{
+    //Comme on érite de l'AbstractController nous avons plus besion du constructer.
+    /**
+     * @Route("/purchases", name="purchase_index")
+     * //Pour remplacer le if(!user) vue dans le chapitre La session dans Symfony 5 (1 heure et 30 minutes)
+     * @IsGranted("ROLE_USER", message="Vous devez être connecté pour accéder à vos commandes")
+     */
+    public function index()
+    {
+        //1.Nous devons nous assurer que la personne est connectée (sinon retour à la page d'acceuil).->Security
+
+        /** @var User */
+        $user = $this->getUser();
+
+
+        //2. Nous voulons savoir qui est connecter.->Security
+        //3. Nous voulons passer l'utilisateur connecté à twig afin d'afficher ces commande. Environement de Twig/Response
+        return $this->render('purchase/index.html.twig', [
+            'purchases' => $user->getPurchases()
+        ]);
+    }
+}
+
+<h3>Créer une ManyToMany avec des informations supplémentaires<h3>
+La relation utiliser au par avant ne convient pas car on ne peux pas savoir combien de produit sont commandés, par commande.
+
+Dans le dossier Entity du fichier Product.php il faut suprimer tout se qui conserne Purchase
+<?php
+
+namespace App\Entity;
+
+use App\Repository\ProductRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
+use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Mapping\ClassMetadata;
+
+/**
+ * @ORM\Entity(repositoryClass=ProductRepository::class)
+ */
+class Product
+{
+    /**
+     * @ORM\Id
+     * @ORM\GeneratedValue
+     * @ORM\Column(type="integer")
+     */
+    private $id;
+
+    /**
+     * @ORM\Column(type="string", length=255)
+     * @Assert\NotBlank(message="Le nom du produit est obligatoire !")
+     * @Assert\Length(min=3, max=255, minMessage="Le nom du produit doit avoir au moin 3 caractères")
+     */
+    private $name;
+
+    /**
+     * @ORM\Column(type="integer")
+     * @Assert\NotBlank(message="Le prix du produit est obligatoire !")
+     */
+    private $price;
+
+    /**
+     * @ORM\Column(type="string", length=255)
+     */
+    private $slug;
+
+    /**
+     * @ORM\Column(type="integer", nullable=true)
+     * @Assert\NotBlank(message="Le stock doit être renseigné !")
+     */
+    private $stock;
+
+    /**
+     * @ORM\ManyToOne(targetEntity=Category::class, inversedBy="products")
+     */
+    private $category;
+
+    /**
+     * @ORM\Column(type="string", length=255)
+     * @Assert\Url(message="La photo pricipale doit être une URL valide")
+     * @Assert\NotBlank(message="La photo principal est obligatoire")
+     */
+    private $mainPicture;
+
+    /**
+     * @ORM\Column(type="text")
+     * @Assert\NotBlank(message="La description courte est obligatoire")
+     * @Assert\Length(min=20, minMessage="La description courte doit quand même faire au moins 20 caractéres")
+     */
+    private $shortDescription;
+
+
+    public function __construct()
+    {
+    }
+
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getName(): ?string
+    {
+        return $this->name;
+    }
+
+    public function setName(?string $name): self
+    {
+        $this->name = $name;
+
+        return $this;
+    }
+
+    public function getPrice(): ?int
+    {
+        return $this->price;
+    }
+
+    public function setPrice(?int $price): self
+    {
+        $this->price = $price;
+
+        return $this;
+    }
+
+    public function getSlug(): ?string
+    {
+        return $this->slug;
+    }
+
+    public function setSlug(string $slug): self
+    {
+        $this->slug = $slug;
+
+        return $this;
+    }
+
+    public function getStock(): ?int
+    {
+        return $this->stock;
+    }
+
+    public function setStock(?int $stock): self
+    {
+        $this->stock = $stock;
+
+        return $this;
+    }
+
+    public function getCategory(): ?Category
+    {
+        return $this->category;
+    }
+
+    public function setCategory(?Category $category): self
+    {
+        $this->category = $category;
+
+        return $this;
+    }
+
+    public function getMainPicture(): ?string
+    {
+        return $this->mainPicture;
+    }
+
+    public function setMainPicture(?string $mainPicture): self
+    {
+        $this->mainPicture = $mainPicture;
+
+        return $this;
+    }
+
+    public function getShortDescription(): ?string
+    {
+        return $this->shortDescription;
+    }
+
+    public function setShortDescription(?string $shortDescription): self
+    {
+        $this->shortDescription = $shortDescription;
+
+        return $this;
+    }
+}
+
+Dans le dossier Entity du fichier Purchase.php il faut suprimer tout se qui conserne Product
+
+<?php
+
+namespace App\Entity;
+
+use App\Repository\PurchaseRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
+use Doctrine\ORM\Mapping as ORM;
+
+/**
+ * @ORM\Entity(repositoryClass=PurchaseRepository::class)
+ */
+class Purchase
+{
+    //Pour eviter de chercher les différent status dans les codes,
+    //nous creont deux public const.
+    public const STATUS_PENDING = 'PENDING';
+    public const STATUS_PAID = 'PAID';
+    /**
+     * @ORM\Id
+     * @ORM\GeneratedValue
+     * @ORM\Column(type="integer")
+     */
+    private $id;
+
+    /**
+     * @ORM\Column(type="string", length=255)
+     */
+    private $FullName;
+
+    /**
+     * @ORM\Column(type="string", length=255)
+     */
+    private $address;
+
+    /**
+     * @ORM\Column(type="string", length=255)
+     */
+    private $postalCode;
+
+    /**
+     * @ORM\Column(type="string", length=255)
+     */
+    private $city;
+
+    /**
+     * @ORM\Column(type="integer")
+     */
+    private $total;
+
+    /**
+     * @ORM\Column(type="string", length=255)
+     */
+    private $status = 'PENDING';
+    //On rajoute pending quand le status n'est pas renseigner il sera en attente.
+
+    /**
+     * @ORM\ManyToOne(targetEntity=User::class, inversedBy="purchases")
+     */
+    private $user;
+
+    /**
+     * @ORM\Column(type="datetime")
+     */
+    private $purchasedAT;
+
+
+    public function __construct()
+    {
+    }
+
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getFullName(): ?string
+    {
+        return $this->FullName;
+    }
+
+    public function setFullName(string $FullName): self
+    {
+        $this->FullName = $FullName;
+
+        return $this;
+    }
+
+    public function getAddress(): ?string
+    {
+        return $this->address;
+    }
+
+    public function setAddress(string $address): self
+    {
+        $this->address = $address;
+
+        return $this;
+    }
+
+    public function getPostalCode(): ?string
+    {
+        return $this->postalCode;
+    }
+
+    public function setPostalCode(string $postalCode): self
+    {
+        $this->postalCode = $postalCode;
+
+        return $this;
+    }
+
+    public function getCity(): ?string
+    {
+        return $this->city;
+    }
+
+    public function setCity(string $city): self
+    {
+        $this->city = $city;
+
+        return $this;
+    }
+
+    public function getTotal(): ?int
+    {
+        return $this->total;
+    }
+
+    public function setTotal(int $total): self
+    {
+        $this->total = $total;
+
+        return $this;
+    }
+
+    public function getStatus(): ?string
+    {
+        return $this->status;
+    }
+
+    public function setStatus(string $status): self
+    {
+        $this->status = $status;
+
+        return $this;
+    }
+
+    public function getUser(): ?User
+    {
+        return $this->user;
+    }
+
+    public function setUser(?User $user): self
+    {
+        $this->user = $user;
+
+        return $this;
+    }
+
+    public function getPurchasedAT(): ?\DateTime
+    {
+        return $this->purchasedAT;
+    }
+
+    public function setPurchasedAt(\DateTime $purchasedAT): self
+    {
+        $this->purchasedAT = $purchasedAT;
+
+        return $this;
+    }
+}
+
+Aprés il suffit de suprimé la table dirrectement dans le terminal.
+
+Avec la commande suivante.
+php bin/console make:migration
+
+puis 
+
+php bin/console doctrine:migrations:migrate
+
+La dans la base de donnée le purchase_product à disparue.
+
+Pour pouvoir avoir une visibilitée sur la commande nous allons créer une nouvelle entity
+
+php bin/console make:entity PurchaseItem   
+
+ created: src/Entity/PurchaseItem.php
+ created: src/Repository/PurchaseItemRepository.php
+ 
+ Entity generated! Now let's add some fields!
+ You can always add more fields later manually or by re-running this command.
+
+ New property name (press <return> to stop adding fields):
+ > product
+
+ Field type (enter ? to see all types) [string]:
+ > ManyToOne
+ManyToOne
+One
+
+ What class should this entity be related to?:
+ > Product
+Product
+47mt
+ Is the PurchaseItem.product property allowed to be null (nullable)? (yes/no) [yes]:
+ >
+
+ Do you want to add a new property to Product so that you can access/update PurchaseItem objects from it -
+ e.g. $product->getPurchaseItems()? (yes/no) [yes]:
+ > 
+
+ A new property will also be added to the Product class so that you can access the related PurchaseItem objects from it.
+
+ New field name inside Product [purchaseItems]:
+ >
+
+ updated: src/Entity/PurchaseItem.php
+ updated: src/Entity/Product.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > purchase
+
+ Field type (enter ? to see all types) [string]:
+ > ManyToOne
+ManyToOne
+One
+
+ What class should this entity be related to?:
+ > Purchase
+Purchase
+se
+ Is the PurchaseItem.purchase property allowed to be null (nullable)? (yes/no) [yes]:
+ > no
+
+ Do you want to add a new property to Purchase so that you can access/update PurchaseItem objects from it 
+- e.g. $purchase->getPurchaseItems()? (yes/no) [yes]:
+ >
+
+ A new property will also be added to the Purchase class so that you can access the related PurchaseItem objects from it.
+
+ New field name inside Purchase [purchaseItems]:
+ >
+
+ Do you want to activate orphanRemoval on your relationship?
+ A PurchaseItem is "orphaned" when it is removed from its related Purchase.
+ e.g. $purchase->removePurchaseItem($purchaseItem)
+
+ NOTE: If a PurchaseItem may *change* from one Purchase to another, answer "no".
+
+ Do you want to automatically delete orphaned App\Entity\PurchaseItem objects (orphanRemoval)? (yes/no) [no]:  
+ > yes
+
+ updated: src/Entity/PurchaseItem.php
+ updated: src/Entity/Purchase.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > productName
+
+ Field type (enter ? to see all types) [string]:
+ >
+
+
+ Field length [255]:
+ >
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/PurchaseItem.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > productPrice
+
+ Field type (enter ? to see all types) [string]:
+ > integer
+integer
+47mr
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/PurchaseItem.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > Quantity
+
+integer
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/PurchaseItem.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > total
+
+ Field type (enter ? to see all types) [string]:
+ > integer
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/PurchaseItem.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ >
+         
+  Success! 
+           
+ Next: When you're ready, create a migration with php bin/console make:migration
+
+ [WARNING] You have 1 previously executed migrations in the database that are not registered migrations.
+
+ Are you sure you wish to continue? (yes/no) [yes]:
+ > yes
+ 
+  Success! 
+ 
+
+ Next: Review the new migration "migrations/Version20211108091855.php"
+ Then: Run the migration with php bin/console doctrine:migrations:migrate
+ See https://symfony.com/doc/current/bundles/DoctrineMigrationsBundle/index.html
+PS C:\laragon\www\Cours-ecommerce --version=5.1\cours-ecommerce> php bin/console doctrine:migrations:migrate
+
+ WARNING! You are about to execute a migration in database "symshop" that could result in schema changes and data loss. Are you sure you wish to continue? (yes/no) [yes]:
+ > yes
+
+ [WARNING] You have 1 previously executed migrations in the database that are not registered migrations.
+
+ >> 2021-11-03 18:22:47 (DoctrineMigrations\Version20211103172945)
+
+ Are you sure you wish to continue? (yes/no) [yes]:
+ > yes
+
+[notice] Migrating up to DoctrineMigrations\Version20211108091855
+[notice] finished in 247.4ms, used 20M memory, 1 migrations executed, 3 sql queries
+
+Voila une nouvelle entity créer purchase_item.
+
+Maintenant il faut créer la fixture pour le purchase_item.
+
+        for ($p = 0; $p < mt_rand(20, 40); $p++) {
+            $purchase = new Purchase;
+
+            $purchase->setFullName($faker->name)
+                ->setAddress($faker->streetAddress)
+                ->setPostalCode($faker->postcode)
+                ->setCity($faker->city)
+                ->setUser($faker->randomElement($users))
+                ->setTotal(mt_rand(2000, 30000))
+                ->setPurchasedAt($faker->dateTimeBetween('-6 months'));
+
+            $selectedProducts = $faker->randomElements($products, mt_rand(3, 5));
+
+            // Modification de la creation du foreach pour la création des fixtures purchaseItem
+            foreach ($selectedProducts as $product) {
+                $purchaseItem = new PurchaseItem;
+                $purchaseItem->setProduct($product)
+                    ->setQuantity(mt_rand(1, 3))
+                    ->setProductName($product->getName())
+                    ->setProductPrice($product->getPrice())
+                    ->setTotal(
+                        $purchaseItem->getProductPrice() * $purchaseItem->getQuantity()
+                    )
+                    ->setPurchase($purchase);
+                    
+                $manager->persist($purchaseItem);    
+            }
+            if ($faker->boolean(90)) {
+                $purchase->setStatus(Purchase::STATUS_PAID);
+            }
+
+            $manager->persist($purchase);
+        }
+
+Injection de la fixture:
+
+php bin/console d:f:l --no-interaction
+
+Il faut que tout les information soit visible sur notre formulaire purchase dans le index.html.twig
+
+{% extends "base.html.twig" %}
+
+{% block title %}
+	Mes commandes
+{% endblock %}
+
+{% block body %}
+	<h1>Mes commandes</h1>
+
+	<table class="table">
+		<thead>
+			<tr>
+				<th>Numéro</th>
+				<th>Adresse</th>
+				<th>Date de commande</th>
+				<th>Produits</th>
+				<th>Total</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for p in purchases %}
+				<tr>
+					<td>
+						{{ p.id }}
+					</td>
+					<td>
+						{{ p.address }}<br>{{ p.postalCode }},
+						{{ p.city }}
+					</td>
+					<td>
+						{{ p.purchasedAt | date('d/m/y H:i') }}
+					</td>
+					<td>
+						<ul>
+                            //appel des composesant de notre commande.
+							{% for item in p.purchaseItems %}
+								<li>
+									{{ item.quantity}}
+									x
+									{{ item.productName }}
+									({{ item.total / 100 }}
+									€)</li>
+							{% endfor %}
+						</ul>
+					</td>
+					<td>{{ p.total / 100 }}
+						€
+					</td>
+				</tr>
+			{% endfor %}
+
+		</tbody>
+	</table>
+{% endblock %}
+
+<h3>📖 Premier récapitulatif</h3>
+
+ManyToMany: Récapitulatif.
+
+Permet de voir des relation de plusieur à plusieur qui sont porteuse d'information.
+
+   product
+------------
+     Id
+
+purchase_product
+-----------------
+    purchase_id
+    product_id
+    quantity
+    productName
+    total
+
+  purchase
+-----------
+    id
+
+Doctrine detecte que nous navons pas besoin d'entity pour la représentés.
+
+Mais pour pouvoir le représenté dans notre code nous avons besoin d'une entity.
+Si on pense q'une relation de plusieur à plusieur ne porte pas d'information particuliére alors faire un ManyToMany.
+
+Mais si vous pensé que la relation plusieur à plusieur, porte des informations crutial dans la base de donnér, exemple la quantity il faut passé par une entity qui fera le lien avec les entitées.
+
+<h3>Formulaire de commande</h3>
+
+php bin/console make:form CartConfirmationType
+
+ The name of Entity or fully qualified model class name that the new form will be bound to (empty for none):
+ >
+
+
+ created: src/Form/CartConfirmationType.php
+
+ Creation dans le dossier form CartConfirmationType.php
+
+ <?php
+
+namespace App\Form;
+
+use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\OptionsResolver\OptionsResolver;
+
+class CartConfirmationType extends AbstractType
+{
+    public function buildForm(FormBuilderInterface $builder, array $options)
+    {
+        $builder
+            ->add('field_name')
+        ;
+    }
+
+    public function configureOptions(OptionsResolver $resolver)
+    {
+        $resolver->setDefaults([
+            // Configure your form options here
+        ]);
+    }
+}
+
+Creation du formulaire avec les informations concernant les commandes.
+<?php
+
+namespace App\Form;
+
+use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
+use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\OptionsResolver\OptionsResolver;
+
+class CartConfirmationType extends AbstractType
+{
+    public function buildForm(FormBuilderInterface $builder, array $options)
+    {
+        $builder
+            ->add('fullName', TextType::class, [
+                'label' => 'Nom complet',
+                'attr' => [
+                    'placeholder' => 'Nom complet pour la livraison'
+                ]
+            ])
+            ->add('address', TextareaType::class, [
+                'label' => 'Address compléte',
+                'attr' => [
+                    'placeholder' => 'Adresse complète pour la livraison'
+                ]
+            ])
+            ->add('postalCode', TextType::class, [
+                'label' => 'Code Postal',
+                'attr' => [
+                    'placeholder' => 'Code postal pour la livraison'
+                ]
+            ])
+            ->add('city', TextType::class, [
+                'label' => 'ville',
+                'attr' => [
+                    'placeholder' => 'Ville pour la livraison'
+                ]
+            ]);
+    }
+
+    public function configureOptions(OptionsResolver $resolver)
+    {
+        $resolver->setDefaults([
+            // Configure your form options here
+        ]);
+    }
+}
+
+Maintenant pour faire apparaitre les information dans la formulaire il faut allé dans le CartController.php
+
+    /**
+     * @Route("/cart", name="cart_show")
+     */
+    public function show()
+    {
+        //appel de la class CartConfirmationType
+        $form = $this->createForm(CartConfirmationType::class);
+
+        $detaileCart = $this->cartService->getDetailedCartItems();
+
+        $total = $this->cartService->getTotal();
+
+        return $this->render('cart/index.html.twig', [
+            'items' => $detaileCart,
+            'total' => $total,
+            //utilisation de confirmationForm
+            'confirmationForm' => $form->createView()
+        ]);
+    }
+
+Puis dans le dossier templates puis du dossier cart du fichier index.html.twig
+
+{% extends 'base.html.twig' %}
+
+{% block title %}Votre panier
+{% endblock %}
+
+{% block body %}
+	<h1>Votre panier</h1>
+	{% if items | length > 0 %}
+		<table class="table">
+			<thead>
+				<tr>
+					<th>Produit</th>
+					<th>Prix</th>
+					<th>Quantité</th>
+					<th>Total</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for item in items %}
+					<tr>
+						<td>
+							{{ item.product.name }}
+						</td>
+						<td>{{ item.product.price }}</td>
+						<td>
+							<a href="{{ path("cart_add", {'id': item.product.id}) }}?returnToCart=true" class="btn btn-sm btn-primary">
+								<i class="fas fa-plus"></i>
+							</a>
+							{{ item.qty }}
+							<a href="{{ path("cart_decrement", {'id': item.product.id}) }}" class="btn btn-sm btn-primary">
+								<i class="fas fa-minus"></i>
+							</a>
+						</td>
+						<td>{{ item.total }}</td>
+						<td>
+							<a href="{{ path("cart_delete", {'id': item.product.id}) }}" class="btn btn-sm btn-danger">
+								<i class="fas fa-trash"></i>
+							</a>
+						</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+			<tfoot>
+				<tr>
+					<td colspan="3">Total :</td>
+					<td colspan="2">{{ total }}</td>
+				</tr>
+			</tfoot>
+		</table>
+		<hr>
+        //integration du formulaire de confirmation de commande.
+		<h2>Confimez votre commande en remplissant ce formulaire</h2>
+		{{ form_start(confirmationForm) }}
+
+		{{ form_widget(confirmationForm) }}
+
+		<button type="submit" class="btn btn-sucess">Je confirme !</button>
+
+		{{ form_end(confirmationForm) }}
+
+	{% else %}
+		<h2>Le panier est vide !</h2>
+	{% endif %}
+{% endblock %}
+
+<h3>Le Controller qui va gérer le formulaire (1/2)</h3>
+
+Dans le PurchaseConfirmationController.php nous avons un probléme avec la route.
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+
+class PurchaseConfirmationController
+{
+    /**
+     * @Route("/purchase/confirm", name="purchase_confirm")
+     */
+    public function confirm(): Response
+    {
+        return $this->render('$0.html.twig', []);
+    }
+}
+
+Symfony la confond avec la route de ProductController.php.
+
+    /**
+     * @Route("/{category_slug}/{slug}", name="product_show")
+     */
+    public function show($slug, ProductRepository $productRepository): Response
+    {
+        $product = $productRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si le produit n'existe pas, alors il vas vers une erreur.
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit demandé n'exite pas");
+        }
+
+        return $this->render('product/show.html.twig', [
+            'product' => $product
+        ]);
+    }
+
+Il considére que purchase et un produit et un slug dans le PurchaseConfirmationController.php
+
+    /**
+     * @Route("/purchase/confirm", name="purchase_confirm")
+     */
+
+Allons voir dans php bin/console debug:route
+
+ Name                       Method     Scheme       Host   Path                               
+ -------------------------- ---------- ------------ ------ -----------------------------------
+  _preview_error             ANY        ANY          ANY    /_error/{code}.{_format}
+  _wdt                       ANY        ANY          ANY    /_wdt/{token}
+  _profiler_home             ANY        ANY          ANY    /_profiler/
+  _profiler_search           ANY        ANY          ANY    /_profiler/search
+  _profiler_search_bar       ANY        ANY          ANY    /_profiler/search_bar
+  _profiler_phpinfo          ANY        ANY          ANY    /_profiler/phpinfo
+  _profiler_search_results   ANY        ANY          ANY    /_profiler/{token}/search/results
+  _profiler_open_file        ANY        ANY          ANY    /_profiler/open
+  _profiler                  ANY        ANY          ANY    /_profiler/{token}
+  _profiler_router           ANY        ANY          ANY    /_profiler/{token}/router
+  _profiler_exception        ANY        ANY          ANY    /_profiler/{token}/exception
+  _profiler_exception_css    ANY        ANY          ANY    /_profiler/{token}/exception.css
+  calcul                     ANY        ANY          ANY    /calcul
+  cart_add                   ANY        ANY          ANY    /cart/add/{id}
+  cart_show                  ANY        ANY          ANY    /cart
+  cart_delete                ANY        ANY          ANY    /cart/delete/{id}
+  cart_decrement             ANY        ANY          ANY    /cart/decrement/{id}
+  category_create            ANY        ANY          ANY    /admin/category/create
+  category_edit              ANY        ANY          ANY    /admin/category/{id}/edit
+  funcpage                   ANY        ANY          ANY    /function
+  name                       ANY        ANY          ANY    /hello/{prenom}
+  example                    ANY        ANY          ANY    /product/{$id}
+  homepage                   ANY        ANY          ANY    /
+
+  // On se rend compte que la route /{category_slug}/{slug} passe avant /purchase/confirm
+  product_show               ANY        ANY          ANY    /{category_slug}/{slug}
+
+  product_edit               ANY        ANY          ANY    /admin/product/{id}/edit
+  product_create             ANY        ANY          ANY    /admin/product/create
+
+// Donc symfony considére que /{category_slug}/{slug} et prioritaire
+  purchase_confirm           ANY        ANY          ANY    /purchase/confirm
+
+  purchase_index             ANY        ANY          ANY    /purchases
+  security_login             ANY        ANY          ANY    /login
+  security_logout            ANY        ANY          ANY    /logout
+  index                      ANY        ANY          ANY    /
+  test                       GET|POST   http|https   ANY    /test/{age}{prenom}
+  product_category           ANY        ANY          ANY    /{slug}
+ -------------------------- ---------- ------------ ------ -----------------------------------
+
+Pour eviter cette problématique dans le ProductController.php nous mettons une priorité à la route à -1. 
+
+    /**
+     * @Route("/{category_slug}/{slug}", name="product_show", priority=-1)
+     */
+    public function show($slug, ProductRepository $productRepository): Response
+    {
+        $product = $productRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si le produit n'existe pas, alors il vas vers une erreur.
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit demandé n'exite pas");
+        }
+
+        return $this->render('product/show.html.twig', [
+            'product' => $product
+        ]);
+    }
+
+
+Retournons voir dans php bin/console debug:route
+
+-------------------------- ---------- ------------ ------ ----------------------------------- 
+  Name                       Method     Scheme       Host   Path                               
+ -------------------------- ---------- ------------ ------ ----------------------------------- 
+  _preview_error             ANY        ANY          ANY    /_error/{code}.{_format}
+  _wdt                       ANY        ANY          ANY    /_wdt/{token}
+  _profiler_home             ANY        ANY          ANY    /_profiler/
+  _profiler_search           ANY        ANY          ANY    /_profiler/search
+  _profiler_search_bar       ANY        ANY          ANY    /_profiler/search_bar
+  _profiler_phpinfo          ANY        ANY          ANY    /_profiler/phpinfo
+  _profiler_search_results   ANY        ANY          ANY    /_profiler/{token}/search/results
+  _profiler_open_file        ANY        ANY          ANY    /_profiler/open
+  _profiler                  ANY        ANY          ANY    /_profiler/{token}
+  _profiler_router           ANY        ANY          ANY    /_profiler/{token}/router
+  _profiler_exception        ANY        ANY          ANY    /_profiler/{token}/exception
+  _profiler_exception_css    ANY        ANY          ANY    /_profiler/{token}/exception.css
+  calcul                     ANY        ANY          ANY    /calcul
+  cart_add                   ANY        ANY          ANY    /cart/add/{id}
+  cart_show                  ANY        ANY          ANY    /cart
+  cart_delete                ANY        ANY          ANY    /cart/delete/{id}
+  cart_decrement             ANY        ANY          ANY    /cart/decrement/{id}
+  category_create            ANY        ANY          ANY    /admin/category/create
+  category_edit              ANY        ANY          ANY    /admin/category/{id}/edit
+  funcpage                   ANY        ANY          ANY    /function
+  name                       ANY        ANY          ANY    /hello/{prenom}
+  example                    ANY        ANY          ANY    /product/{$id}
+  homepage                   ANY        ANY          ANY    /
+  product_edit               ANY        ANY          ANY    /admin/product/{id}/edit
+  product_create             ANY        ANY          ANY    /admin/product/create3
+
+  // perchase et maintenant passé devant /{category_slug}/{slug}
+  purchase_confirm           ANY        ANY          ANY    /purchase/confirm
+
+  purchase_index             ANY        ANY          ANY    /purchases
+  security_login             ANY        ANY          ANY    /login
+  security_logout            ANY        ANY          ANY    /logout
+  index                      ANY        ANY          ANY    /
+  test                       GET|POST   http|https   ANY    /test/{age}{prenom}
+  product_category           ANY        ANY          ANY    /{slug}
+
+  // Maintenant /{category_slug}/{slug} se retrouve en dernier.
+  product_show               ANY        ANY          ANY    /{category_slug}/{slug}
+ -------------------------- ---------- ------------ ------ -----------------------------------
+
+Mise en place de l'algorithme pour le PurchaseConfirmationController.php
+reflexiont sur le fonctionnement de /purchase/confirm.
+<?php
+
+namespace App\Controller\Purchase;
+
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+
+class PurchaseConfirmationController
+{
+    /**
+     * @Route("/purchase/confirm", name="purchase_confirm")
+     */
+    public function confirm(Request $requet): Response
+    {
+        // 1. Nous voulons lire les données du formulaire
+        // FormFactoryInterface / Request
+
+        // 2. Si le formulaire na pas été soumis : dégager
+
+        // 3. Si je ne suis pas connecté : dégager (Security)
+
+        // 4. Si il n'y a pas de produits dans mon panier : dégarger (CartService)
+
+        // 5. Nous allons créer une Purchase
+
+        // 6. Nous allons le lier avec l'utilisateur actuellement connecté (Security)
+
+        // 7. Nous allons la lier avec les produits qui sont dans le panier (CartService)
+
+        // 8. Nous allons enregistrer la commande (EntityManagerInterface)
+    }
+}
+
+Importation des services pour les différentes actions
+<?php
+
+namespace App\Controller\Purchase;
+
+use App\Cart\CartService;
+use App\Form\CartConfirmationType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Form\FormFactoryInterface;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\HttpFoundation\Session\Flash\FlashBagInterface;
+use Symfony\Component\Routing\RouterInterface;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
+use Symfony\Component\Security\Core\Security;
+
+class PurchaseConfirmationController
+{
+    protected $formFactory;
+    protected $router;
+    protected $security;
+    protected $cartService;
+
+    public function __construct(FormFactoryInterface $formFactory, RouterInterface $router, Security $security, CartService $cartService)
+    {
+        $this->router = $router;
+        $this->formFactory = $formFactory;
+        $this->security = $security;
+        $this->cartService = $cartService;
+    }
+
+    /**
+     * @Route("/purchase/confirm", name="purchase_confirm")
+     */
+    public function confirm(Request $request, FlashBagInterface $flashBag): Response
+    {
+        // 1. Nous voulons lire les données du formulaire
+        // FormFactoryInterface / Request
+        $form = $this->formFactory->create(CartConfirmationType::class);
+
+        $form->handleRequest($request);
+
+
+        // 2. Si le formulaire na pas été soumis : dégager
+        if (!$form->isSubmitted()) {
+            // Message Flash puis redirection (FlashBagInterface)
+            $flashBag->add('warning', 'Vous devez remplir le formulaire de confirmation');
+            return new RedirectResponse($this->router->generate('cart_show'));
+        }
+        // 3. Si je ne suis pas connecté : dégager (Security)
+        $user = $this->security->getUser();
+
+        if (!$user) {
+            throw new AccessDeniedException("Vous devez être connecté pour confirmer une commande");
+        }
+
+
+        // 4. Si il n'y a pas de produits dans mon panier : dégarger (CartService)
+        $cartItems = $this->cartService->getDetailedCartItems();
+
+        if (count($cartItems) === 0) {
+            $flashBag->add('warning', 'Vous ne pouvez confirmer une commande avec un panier vide');
+            return new RedirectResponse($this->router->generate('cart_show'));
+        }
+
+        // 5. Nous allons créer une Purchase
+
+        // 6. Nous allons le lier avec l'utilisateur actuellement connecté (Security)
+
+        // 7. Nous allons la lier avec les produits qui sont dans le panier (CartService)
+
+        // 8. Nous allons enregistrer la commande (EntityManagerInterface)
+    }
+}
+
+Test des différentes action sur la page index.html.twig de cart
+
+        <h2>Confimez votre commande en remplissant ce formulaire</h2>
+        //test de purchase_confirm
+		{{ form_start(confirmationForm, {'action': path('purchase_confirm')}) }}
+
+		{{ form_widget(confirmationForm) }}
+
+		<button type="submit" class="btn btn-sucess">Je confirme !</button>
+
+		{{ form_end(confirmationForm) }}
+
+<h3>Le Controller qui va gérer le formulaire (2/2)</h3>
+Mise en place du reste de élèment de PurchaseConfirmationController.php
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use DateTime;
+use App\Entity\Purchase;
+use App\Cart\CartService;
+use App\Entity\PurchaseItem;
+use App\Form\CartConfirmationType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Core\Security;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\RouterInterface;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Form\FormFactoryInterface;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
+use Symfony\Component\HttpFoundation\Session\Flash\FlashBagInterface;
+
+class PurchaseConfirmationController
+{
+    protected $formFactory;
+    protected $router;
+    protected $security;
+    protected $cartService;
+    protected $em;
+
+    public function __construct(FormFactoryInterface $formFactory, RouterInterface $router, Security $security, CartService $cartService, EntityManagerInterface $em)
+    {
+        $this->router = $router;
+        $this->formFactory = $formFactory;
+        $this->security = $security;
+        $this->cartService = $cartService;
+        $this->em = $em;
+    }
+
+    /**
+     * @Route("/purchase/confirm", name="purchase_confirm")
+     */
+    public function confirm(Request $request, FlashBagInterface $flashBag): Response
+    {
+        // 1. Nous voulons lire les données du formulaire
+        // FormFactoryInterface / Request
+        $form = $this->formFactory->create(CartConfirmationType::class);
+
+        $form->handleRequest($request);
+
+
+        // 2. Si le formulaire na pas été soumis : dégager
+        if (!$form->isSubmitted()) {
+            // Message Flash puis redirection (FlashBagInterface)
+            $flashBag->add('warning', 'Vous devez remplir le formulaire de confirmation');
+            return new RedirectResponse($this->router->generate('cart_show'));
+        }
+
+        // 3. Si je ne suis pas connecté : dégager (Security)
+        $user = $this->security->getUser();
+
+        if (!$user) {
+            throw new AccessDeniedException("Vous devez être connecté pour confirmer une commande");
+        }
+
+        // 4. Si il n'y a pas de produits dans mon panier : dégarger (CartService)
+        $cartItems = $this->cartService->getDetailedCartItems();
+
+        if (count($cartItems) === 0) {
+            $flashBag->add('warning', 'Vous ne pouvez confirmer une commande avec un panier vide');
+            return new RedirectResponse($this->router->generate('cart_show'));
+        }
+
+
+        // 5. Nous allons créer une Purchase qui sera donné par le formulaire CartConfirmationType.php
+        /** @var Purchase */
+        $purchase = $form->getData();
+
+        // 6. Nous allons le lier avec l'utilisateur actuellement connecté (Security)
+        $purchase->setUser($user)
+            ->setPurchasedAt(new DateTime());
+
+        $this->em->persist($purchase);
+
+        // 7. Nous allons la lier avec les produits qui sont dans le panier (CartService)
+        $total = 0;
+
+        foreach ($this->cartService->getDetailedCartItems() as $cartItem) {
+            $purchaseItem = new PurchaseItem;
+            $purchaseItem->setPurchase($purchase)
+                ->setProduct($cartItem->product)
+                ->setProductName($cartItem->product->getName())
+                ->setQuantity($cartItem->qty)
+                ->setTotal($cartItem->getTotal())
+                ->setProductPrice($cartItem->product->getPrice());
+
+            $total += $cartItem->getTotal();
+
+            $this->em->persist($purchaseItem);
+        }
+
+        $purchase->setTotal($total);
+
+        // 8. Nous allons enregistrer la commande (EntityManagerInterface)
+        $this->em->flush();
+
+        $flashBag->add('success', "La commande a bien été enregistrée");
+        return new RedirectResponse($this->router->generate('purchase_index'));
+    }
+}
+
+Dans le CartService.php pour avoir un array nous integrons une route @return Cartitem
+Comme sa nous avons l'auto complession pour $cartItem
+
+    /**
+     *
+     * @return CartItem[]
+     */
+    public function getDetailedCartItems(): array
+    {
+        $detaileCart = [];
+
+
+        foreach ($this->getCart() as $id => $qty) {
+            $product = $this->productRepository->find($id);
+
+            //Si un produit à était suprimé, il continurat la boucle.
+            if (!$product) {
+                continue;
+            }
+
+            $detaileCart[] = new CartItem($product, $qty);
+        }
+
+        return $detaileCart;
+    }
+
+<h3>Refactoring du Controller</h3>
+La bonne pratique et de toujours d'injecter les dépendances avec le constructeur par convention.
+Grace a AbstractController nous heritons des services donc nous pouvons en reduire certains code.
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use DateTime;
+use App\Entity\Purchase;
+use App\Cart\CartService;
+use App\Entity\PurchaseItem;
+use App\Form\CartConfirmationType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+
+
+class PurchaseConfirmationController extends AbstractController
+{
+    protected $cartService;
+    protected $em;
+
+    public function __construct(CartService $cartService, EntityManagerInterface $em)
+    {
+        $this->cartService = $cartService;
+        $this->em = $em;
+    }
+
+    /**
+     * @Route("/purchase/confirm", name="purchase_confirm")
+     * @IsGranted("ROLE_USER", message="Vous devez être connecté pour confirmer une commande")
+     */
+    public function confirm(Request $request): Response
+    {
+        // 1. Nous voulons lire les données du formulaire
+        // FormFactoryInterface / Request
+        $form = $this->createForm(CartConfirmationType::class);
+
+        $form->handleRequest($request);
+
+
+        // 2. Si le formulaire na pas été soumis : dégager
+        if (!$form->isSubmitted()) {
+            // Message Flash puis redirection (FlashBagInterface)
+
+            $this->addFlash('warning', 'Vous devez remplir le formulaire de confirmation');
+            return $this->redirectToRoute('cart_show');
+        }
+
+        // 3. Si je ne suis pas connecté : dégager (Security)
+        $user = $this->getUser();
+
+
+        // 4. Si il n'y a pas de produits dans mon panier : dégarger (CartService)
+        $cartItems = $this->cartService->getDetailedCartItems();
+
+        if (count($cartItems) === 0) {
+            $this->addFlash('warning', 'Vous ne pouvez confirmer une commande avec un panier vide');
+            return $this->redirectToRoute('cart_show');
+        }
+
+
+        // 5. Nous allons créer une Purchase qui sera donné par le formulaire CartConfirmationType.php
+        /** @var Purchase */
+        $purchase = $form->getData();
+
+        // 6. Nous allons le lier avec l'utilisateur actuellement connecté (Security)
+        $purchase->setUser($user)
+            ->setPurchasedAt(new DateTime());
+
+        $this->em->persist($purchase);
+
+        // 7. Nous allons la lier avec les produits qui sont dans le panier (CartService)
+        $total = 0;
+
+        foreach ($this->cartService->getDetailedCartItems() as $cartItem) {
+            $purchaseItem = new PurchaseItem;
+            $purchaseItem->setPurchase($purchase)
+                ->setProduct($cartItem->product)
+                ->setProductName($cartItem->product->getName())
+                ->setQuantity($cartItem->qty)
+                ->setTotal($cartItem->getTotal())
+                ->setProductPrice($cartItem->product->getPrice());
+
+            $total += $cartItem->getTotal();
+
+            $this->em->persist($purchaseItem);
+        }
+
+        $purchase->setTotal($total);
+
+        // 8. Nous allons enregistrer la commande (EntityManagerInterface)
+        $this->em->flush();
+
+        $this->addFlash('success', "La commande a bien été enregistrée");
+        return $this->redirectToRoute('purchase_index');
+    }
+}
+
+<h3>Finaliser le processus de commande</h3>
+
+Le soucie est que quand une commande est passer elle reste active.
+
+Dans le CartService.php nous créons un empty avec un tableau vide.
+
+    public function empty()
+    {
+        $this->saveCart([]);
+    }
+
+Dans le PurchaseConfirmationController.php nous allons demandé à vider le pagnier
+avant le flush.
+
+        // 8. Nous allons enregistrer la commande (EntityManagerInterface)
+        $this->em->flush();
+        //Vider le cache du panier.
+        $this->cartService->empty();
+
+        $this->addFlash('success', "La commande a bien été enregistrée");
+        return $this->redirectToRoute('purchase_index');
+
+Le Total exister directement dans le CartService donc dans le PurchaseConfirmationController.php
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use DateTime;
+use App\Entity\Purchase;
+use App\Cart\CartService;
+use App\Entity\PurchaseItem;
+use App\Form\CartConfirmationType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+
+
+class PurchaseConfirmationController extends AbstractController
+{
+    protected $cartService;
+    protected $em;
+
+    public function __construct(CartService $cartService, EntityManagerInterface $em)
+    {
+        $this->cartService = $cartService;
+        $this->em = $em;
+    }
+
+    /**
+     * @Route("/purchase/confirm", name="purchase_confirm")
+     * @IsGranted("ROLE_USER", message="Vous devez être connecté pour confirmer une commande")
+     */
+    public function confirm(Request $request): Response
+    {
+        // 1. Nous voulons lire les données du formulaire
+        // FormFactoryInterface / Request
+        $form = $this->createForm(CartConfirmationType::class);
+
+        $form->handleRequest($request);
+
+
+        // 2. Si le formulaire na pas été soumis : dégager
+        if (!$form->isSubmitted()) {
+            // Message Flash puis redirection (FlashBagInterface)
+
+            $this->addFlash('warning', 'Vous devez remplir le formulaire de confirmation');
+            return $this->redirectToRoute('cart_show');
+        }
+
+        // 3. Si je ne suis pas connecté : dégager (Security)
+        $user = $this->getUser();
+
+
+        // 4. Si il n'y a pas de produits dans mon panier : dégarger (CartService)
+        $cartItems = $this->cartService->getDetailedCartItems();
+
+        if (count($cartItems) === 0) {
+            $this->addFlash('warning', 'Vous ne pouvez confirmer une commande avec un panier vide');
+            return $this->redirectToRoute('cart_show');
+        }
+
+
+        // 5. Nous allons créer une Purchase qui sera donné par le formulaire CartConfirmationType.php
+        /** @var Purchase */
+        $purchase = $form->getData();
+
+        // 6. Nous allons le lier avec l'utilisateur actuellement connecté (Security)
+        $purchase->setUser($user)
+            ->setPurchasedAt(new DateTime())
+            //Nous appelons directement le setTotal du CartService
+            ->setTotal($this->cartService->getTotal());
+
+        $this->em->persist($purchase);
+
+        // 7. Nous allons la lier avec les produits qui sont dans le panier (CartService)
+        foreach ($this->cartService->getDetailedCartItems() as $cartItem) {
+            $purchaseItem = new PurchaseItem;
+            $purchaseItem->setPurchase($purchase)
+                ->setProduct($cartItem->product)
+                ->setProductName($cartItem->product->getName())
+                ->setQuantity($cartItem->qty)
+                ->setTotal($cartItem->getTotal())
+                ->setProductPrice($cartItem->product->getPrice());
+
+            $this->em->persist($purchaseItem);
+        }
+
+        // 8. Nous allons enregistrer la commande (EntityManagerInterface)
+        $this->em->flush();
+
+        $this->cartService->empty();
+
+        $this->addFlash('success', "La commande a bien été enregistrée");
+        return $this->redirectToRoute('purchase_index');
+    }
+}
+
+pour la sécuritée de pour la connection de la confirmationForm.
+Dans le dossier template->car-> du fichier index.html.twig
+
+        {% if app.user %}
+			<h2>Confimez votre commande en remplissant ce formulaire</h2>
+			{{ form_start(confirmationForm, {'action': path('purchase_confirm')}) }}
+
+			{{ form_widget(confirmationForm) }}
+			<hr>
+			<button type="submit" class="btn btn-sucess">Je confirme !</button>
+
+			{{ form_end(confirmationForm) }}
+		{% else %}
+			<h2>Vous devez être connecté pour confirmer cette commande</h2>
+			<a href=" {{ path('security_login')}} " class="btn btn-sucess">Connection</a>
+			ou
+			<a href="#">Créez un compte</a>
+		{% endif %}
 
 
 
