@@ -23,7 +23,7 @@ use Symfony\Component\Validator\Constraints\Collection;
 class ProductController extends AbstractController
 {
     /**
-     * @Route("/{slug}", name="product_category", priority=-1)
+     * @Route("/{slug}", name="product_category", priority=-3)
      */
     public function category($slug, CategoryRepository $categoryRepository): Response
     {
@@ -43,7 +43,7 @@ class ProductController extends AbstractController
         ]);
     }
     /**
-     * @Route("/{category_slug}/{slug}", name="product_show", priority=-1)
+     * @Route("/{category_slug}/{slug}", name="product_show", priority=-2)
      */
     public function show($slug, ProductRepository $productRepository): Response
     {

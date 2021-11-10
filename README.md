@@ -6745,6 +6745,329 @@ Dans le dossier template->car-> du fichier index.html.twig
 			<a href="#">Créez un compte</a>
 		{% endif %}
 
+<h3>📖 Conclusion</h3>
+
+Single Responsibility Principal
+Faites de votre mieux pour distribuer les Responsabilités sur différentes classes!
+La liste de commande d'un coté PurchasesListController
+Et la prise de commande de l'autre PurchaseConfirmationController
+
+Surtout appliquer les bonnes pratiques et appliquer les outils qui sont fournie.
+
+<h3>Refactoring : créer une classe pour persister la Purchase</h3>
+La bonne pratique: dispachez les responsabilités dans des classes séparées
+(Single Responsability Principle)
+
+Le PurchaseConfirmationController.php les code sont trop regrouper. Il faut eviter de melanger les fonctions 
+pour persister et les confirmations de commande.
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use App\Entity\Purchase;
+use App\Cart\CartService;
+use App\Entity\PurchaseItem;
+use App\Form\CartConfirmationType;
+use App\Purchase\PurchasePersister;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+
+
+class PurchaseConfirmationController extends AbstractController
+{
+    protected $cartService;
+    protected $em;
+    protected $persister;
+
+    public function __construct(CartService $cartService, EntityManagerInterface $em, PurchasePersister $persister)
+    {
+        $this->cartService = $cartService;
+        $this->em = $em;
+        $this->persister = $persister;
+    }
+
+
+    /**
+     * @Route("/purchase/confirm", name="purchase_confirm")
+     * @IsGranted("ROLE_USER", message="Vous devez être connecté pour confirmer une commande")
+     */
+    public function confirm(Request $request): Response
+    {
+        // 1. Nous voulons lire les données du formulaire
+        // FormFactoryInterface / Request
+        $form = $this->createForm(CartConfirmationType::class);
+
+        $form->handleRequest($request);
+
+
+        // 2. Si le formulaire na pas été soumis : dégager
+        if (!$form->isSubmitted()) {
+            // Message Flash puis redirection (FlashBagInterface)
+
+            $this->addFlash('warning', 'Vous devez remplir le formulaire de confirmation');
+            return $this->redirectToRoute('cart_show');
+        }
+
+
+        // 4. Si il n'y a pas de produits dans mon panier : dégarger (CartService)
+        $cartItems = $this->cartService->getDetailedCartItems();
+
+        if (count($cartItems) === 0) {
+            $this->addFlash('warning', 'Vous ne pouvez confirmer une commande avec un panier vide');
+            return $this->redirectToRoute('cart_show');
+        }
+
+
+        // 5. Nous allons créer une Purchase qui sera donné par le formulaire CartConfirmationType.php
+        /** @var Purchase */
+        $purchase = $form->getData();
+
+        $this->persister->storePurchase($purchase);
+
+        $this->cartService->empty();
+
+        $this->addFlash('success', "La commande a bien été enregistrée");
+
+        return $this->redirectToRoute('purchase_index');
+    }
+}
+
+Pour la partie Persiter Nous créons un dossier Purchase dans src et nous créons une classe PurchasePersister.php
+
+<?php
+
+namespace App\Purchase;
+
+use App\Cart\CartService;
+use DateTime;
+use App\Entity\Purchase;
+use App\Entity\PurchaseItem;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Security\Core\Security;
+
+class PurchasePersister
+{
+    protected $security;
+    protected $cartService;
+    protected $em;
+
+
+    public function __construct(Security $security, CartService $cartService, EntityManagerInterface $em)
+    {
+        $this->security = $security;
+        $this->cartService = $cartService;
+        $this->em = $em;
+    }
+
+    public function storePurchase(Purchase $purchase)
+    {
+        // Intégrer tout ce qu'il faut et persister la purchase
+        // 6. Nous allons le lier avec l'utilisateur actuellement connecté (Security)
+        $purchase->setUser($this->security->getUser())
+            ->setPurchasedAt(new DateTime())
+            ->setTotal($this->cartService->getTotal());
+
+        $this->em->persist($purchase);
+
+        // 7. Nous allons la lier avec les produits qui sont dans le panier (CartService)
+        foreach ($this->cartService->getDetailedCartItems() as $cartItem) {
+            $purchaseItem = new PurchaseItem;
+            $purchaseItem->setPurchase($purchase)
+                ->setProduct($cartItem->product)
+                ->setProductName($cartItem->product->getName())
+                ->setQuantity($cartItem->qty)
+                ->setTotal($cartItem->getTotal())
+                ->setProductPrice($cartItem->product->getPrice());
+
+            $this->em->persist($purchaseItem);
+        }
+
+        // 8. Nous allons enregistrer la commande (EntityManagerInterface)
+        $this->em->flush();
+    }
+}
+
+<h2>Architecture et paiement Stripe ! (55 minutes)</h2>
+
+Utilisation de l'API Stripe pour le paiement (https://stripe.com/fr/docs/api)
+
+Création d'un compte Stripe (https://dashboard.stripe.com/register) une fois le compte créé,
+aller sur la documentation https://stripe.com/docs/payments?payments=popular puis accepter les paiments en ligne,
+https://stripe.com/docs/checkout/quickstart
+
+<h3>Mise en place de la page de paiement</h3>
+
+Creation du fichier Purchase PurchasePaymentController.php dans le quel nous allons créer la page de paiement.
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+
+class PurchasePaymentController extends AbstractController
+{
+    /**
+     * @Route("/purchase/pay/{id}", name="purchase_payment_form")
+     */
+    public function ShowCardForm()
+    {
+        return $this->render('purchase/payment.html.twig');
+    }
+}
+
+Creation dans le dossier templates de purchase le fichier payment.html.twig
+
+{% extends "base.html.twig" %}
+
+{% block titel %}
+	Payer votre commande avec stripe
+{% endblock %}
+
+{% block body %}
+	<h1>Payer votre commande avec Stripe</h1>
+{% endblock %}
+
+Nous modifion le PurchaseConfirmationController.php pour ajouter le code suivant :
+
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use App\Entity\Purchase;
+use App\Cart\CartService;
+use App\Entity\PurchaseItem;
+use App\Form\CartConfirmationType;
+use App\Purchase\PurchasePersister;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+
+
+class PurchaseConfirmationController extends AbstractController
+{
+    protected $cartService;
+    protected $em;
+    protected $persister;
+
+    public function __construct(CartService $cartService, EntityManagerInterface $em, PurchasePersister $persister)
+    {
+        $this->cartService = $cartService;
+        $this->em = $em;
+        $this->persister = $persister;
+    }
+
+
+    /**
+     * @Route("/purchase/confirm", name="purchase_confirm")
+     * @IsGranted("ROLE_USER", message="Vous devez être connecté pour confirmer une commande")
+     */
+    public function confirm(Request $request): Response
+    {
+        // 1. Nous voulons lire les données du formulaire
+        // FormFactoryInterface / Request
+        $form = $this->createForm(CartConfirmationType::class);
+
+        $form->handleRequest($request);
+
+
+        // 2. Si le formulaire na pas été soumis : dégager
+        if (!$form->isSubmitted()) {
+            // Message Flash puis redirection (FlashBagInterface)
+
+            $this->addFlash('warning', 'Vous devez remplir le formulaire de confirmation');
+            return $this->redirectToRoute('cart_show');
+        }
+
+
+        // 4. Si il n'y a pas de produits dans mon panier : dégarger (CartService)
+        $cartItems = $this->cartService->getDetailedCartItems();
+
+        if (count($cartItems) === 0) {
+            $this->addFlash('warning', 'Vous ne pouvez confirmer une commande avec un panier vide');
+            return $this->redirectToRoute('cart_show');
+        }
+
+
+        // 5. Nous allons créer une Purchase qui sera donné par le formulaire CartConfirmationType.php
+        /** @var Purchase */
+        $purchase = $form->getData();
+
+        $this->persister->storePurchase($purchase);
+
+        //Supression de la ligne qui vide la panier et la ligne message addFlash
+        //- $this->cartService->empty();
+        Le panier ne doit pas étre vide si la personne decide de changer d'avis.
+        //- $this->addFlash('success', "La commande a bien été enregistrée");
+
+        // Nouvelle redirection pour le paiment avec le id de la commande
+        return $this->redirectToRoute('purchase_payment_form', [
+            'id' => $purchase->getId()
+        ]);
+    }
+}
+<h3>Créer une intention de paiement avec Stripe</h3>
+
+Mise en place de stripe dans notre application.
+Installation de stripe : composer require stripe/stripe-php
+
+Mise en place de stripe sur PurchasePaymentController.php
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use App\Repository\PurchaseRepository;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+
+class PurchasePaymentController extends AbstractController
+{
+    /**
+     * @Route("/purchase/pay/{id}", name="purchase_payment_form")
+     */
+    public function ShowCardForm($id, PurchaseRepository $purchaseRepository)
+    {
+        $purchase = $purchaseRepository->find($id);
+        // Si la commande n'existe pas : redirection
+        if (!$purchase) {
+            return $this->redirectToRoute('cart_show');
+        }
+
+        // Ceci est un exemple de clé API de test.
+        \Stripe\Stripe::setApiKey('sk_test_51Iil1QJGVAs2Om8rquD7QN41xXVIhaBnLoBD53mCJzl86hQsSreAOjN3E9geTj8C9dMojtDTAFVfhokKXgkrBLFU00i9UiavPu');
+
+        // Créer un PaymentIntent avec le montant et la devise
+        $intent = \Stripe\PaymentIntent::create([
+            'amount' => $purchase->getTotal(),
+            'currency' => 'eur',
+        ]);
+
+
+        return $this->render('purchase/payment.html.twig', [
+            'clientSecret' => $intent->client_secret,
+        ]);
+    }
+}
+
+<h3>Formulaire de carte bleue avec Stripe Elements</h3>
+
+
+
+
+
+
+
 
 
 
