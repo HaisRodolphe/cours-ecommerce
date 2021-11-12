@@ -7062,8 +7062,1176 @@ class PurchasePaymentController extends AbstractController
 
 <h3>Formulaire de carte bleue avec Stripe Elements</h3>
 
+Creation dans le dossier templates de purchase le fichier payment.html.twig
+Suivant la documentation https://stripe.com/docs et https://stripe.com/docs/payments/quickstart.
+Créer une page de paiement sur le client
+
+{% extends "base.html.twig" %}
+
+{% block titel %}
+	Payer votre commande avec stripe
+{% endblock %}
+
+{% block body %}
+
+	<h1>Payer votre commande avec Stripe</h1>
+    // Mise en place d'une page de paiement sur le client
+    //Définir le formulaire de paiement
+	<form id="payment-form">
+		<h3>Entrée votre numéro de carte</h3>
+		<div
+			class='container' id="card-element">
+			<!--Stripe.js injects the Payment Element-->
+			<h3>cart</h3>
+		</div>
+		<hr>
+		<button id="submit" class="btn btn-success">
+			<div class="spinner hidden" id="spinner"></div>
+			<span id="button-text">Payer avec stripe !</span>
+		</button>
+		<p id="card-error" role="alert"></p>
+		<div id="card-message" class="hidden"></div>
+	</form>
+    //Charger Stripe.js
+    //Utilisez Stripe.js pour rester conforme à la norme PCI en vous assurant que les détails de 
+    //paiement sont envoyés directement à Stripe sans toucher votre serveur.
+	<script src="https://js.stripe.com/v3/"></script>
+    //
+	<script src="/js/payment.js"></script>
+
+{% endblock %}
+
+{% block javascripts %}
+	{{ parent() }}
+	<script>
+		const clientSecret = '{{ clientSecret }}';
+        //Initialisez Stripe.js avec vos clés API
+const stripePublicKey = '{{ stripePublicKey }}';
+const redirectAfterSuccessUrl = "{{ url('purchase_payment_success', { 'id': purchase.id }) }}"
+	</script>
+{% endblock %}
+
+Créer un dossier JS dans le dossier public puis créer le fichier payment.js
+Dans le quel nous allons metre en place le code de de card.
+Créer un Élément de paiementet montez-le sur l'espace réservé <div>dans votre formulaire de paiement. Cela intègre un iframe avec un formulaire dynamique qui affiche les types de modes de paiement configurés disponibles à partir de PaymentIntent, permettant à votre client de sélectionner un mode de paiement. Le formulaire collecte automatiquement les détails des paiements associés pour le type de mode de paiement sélectionné.
+
+const stripe = Stripe(stripePublicKey);
+
+const elements = stripe.elements();
+
+const card = elements.create("card");
+// Stripe injects an iframe into the DOM
+card.mount("#card-element");
+
+card.on("change", function (event) {
+    // Disable the Pay button if there are no card details in the Element
+    document.querySelector("button").disabled = event.empty;
+    document.querySelector("#card-error").textContent = event.error ? event.error.message : "";
+});
 
 
+const form = document.getElementById("payment-form");
+
+form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    // Complete payment when the submit button is clicked
+    //payWithCard(stripe, card, data.clientSecret);
+    stripe
+        .confirmCardPayment(clientSecret, {
+            payment_method: {
+                card: card
+            }
+        })
+        .then(function (result) {
+            if (result.error) {
+                // Show error to your customer
+                console.log(result.error.message);
+            } else {
+                // The payment succeeded!
+                window.location.href = redirectAfterSuccessUrl;
+            }
+        });
+
+});
+
+Gestion des clefs API:
+Dans le dossier config, mise en place des clef API de stripe.
+
+App\Stripe\StripeService:
+        arguments:
+            $secretKey: '%env(STRIPE_SECRET_KEY)%'
+            $publicKey: '%env(STRIPE_PUBLIC_KEY)%'
+
+Pour evité de faire les changements en le mode development et le mode production. Pour la gestion des clef API.
+Il faut les mettre en place dans le fichier .env.
+
+STRIPE_PUBLIC_KEY="pk_test_51Iil1QJGVAs2Om8revWfx73zmkXeGt6VLJkicoPiTwXQ18gr5GTLoFFIQ7IVVM8Brxvvb8VOypvpLM9wBC3rwoEl00lsfFYuOa"
+STRIPE_SECRET_KEY="sk_test_51Iil1QJGVAs2Om8rquD7QN41xXVIhaBnLoBD53mCJzl86hQsSreAOjN3E9geTj8C9dMojtDTAFVfhokKXgkrBLFU00i9UiavPu"
+
+<h3>Finaliser le paiement après confirmation de Stripe</h3>
+
+Création dans le dossier src->Controller->PurchasePaymentSuccesController.php
+Permet de vérifier et de validé le paiement pour enfin étre rediriger.
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use App\Entity\Purchase;
+use App\Cart\CartService;
+use App\Repository\PurchaseRepository;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Routing\Annotation\Route;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+
+class PurchasePaymentSuccessController extends AbstractController
+{
+    /**
+     * @Route("/purchase/terminate/{id}", name="purchase_payment_success")
+     * @IsGranted("ROLE_USER")
+     */
+    public function index($id, PurchaseRepository $purchaseRepository, EntityManagerInterface $em, CartService $cartService)
+    {
+
+
+        //1. Je récupère la commande
+        $purchase = $purchaseRepository->find($id);
+
+
+        if (
+            !$purchase ||
+            ($purchase && $purchase->getUser() !== $this->getUser()) ||
+            ($purchase && $purchase->getStatus() === Purchase::STATUS_PAID)
+        ) {
+            $this->addFlash('warning', "La commande n'existe pas");
+            return $this->redirectToRoute("purchase_index");
+        }
+        //2. Je la fait passer au status PAYEE (PAID)
+        $purchase->setStatus(Purchase::STATUS_PAID);
+        $em->flush();
+
+        //3. Je vide le panier
+        $cartService->empty();
+
+        //4. Je redirige avec un flash vers la liste des commandes
+        $this->addFlash('success', "La commande a été payée et confirmée !");
+        return $this->redirectToRoute("purchase_index");
+    }
+}
+
+<h3>Refactoring créer un StripeService</h3>
+
+Creation d'un dossier Stripe dans le dossier src puis créer le fichier StripeService.php
+
+<?php
+
+namespace App\Stripe;
+
+use App\Entity\Purchase;
+
+class StripeService
+{
+    protected $secretKey;
+    protected $publicKey;
+
+    public function __construct(string $secretKey, string $publicKey)
+    {
+
+        $this->secretKey = $secretKey;
+        $this->publicKey = $publicKey;
+    }
+
+    public function getPublicKey(): string
+    {
+        return $this->publicKey;
+    }
+
+    public function getPaymentIntent(Purchase $purchase)
+    {
+        // This is a sample test API key.
+        \Stripe\Stripe::setApiKey($this->secretKey);
+
+        return \Stripe\PaymentIntent::create([
+            'amount' => $purchase->getTotal(),
+            'currency' => 'eur'
+        ]);
+    }
+}
+
+Gestion des clefs API:
+Dans le dossier config, mise en place des clef API de stripe.
+
+App\Stripe\StripeService:
+        arguments:
+            $secretKey: '%env(STRIPE_SECRET_KEY)%'
+            $publicKey: '%env(STRIPE_PUBLIC_KEY)%'
+
+Pour evité de faire les changements en le mode development et le mode production. Pour la gestion des clef API.
+Il faut les mettre en place dans le fichier .env.
+
+STRIPE_PUBLIC_KEY="pk_test_51Iil1QJGVAs2Om8revWfx73zmkXeGt6VLJkicoPiTwXQ18gr5GTLoFFIQ7IVVM8Brxvvb8VOypvpLM9wBC3rwoEl00lsfFYuOa"
+STRIPE_SECRET_KEY="sk_test_51Iil1QJGVAs2Om8rquD7QN41xXVIhaBnLoBD53mCJzl86hQsSreAOjN3E9geTj8C9dMojtDTAFVfhokKXgkrBLFU00i9UiavPu"
+
+Integration du StripeService dans le fichier PurchasePaymentController.php
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use App\Entity\Purchase;
+use App\Stripe\StripeService;
+use App\Repository\PurchaseRepository;
+use Symfony\Component\Routing\Annotation\Route;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+
+class PurchasePaymentController extends AbstractController
+{
+    /**
+     * @Route("/purchase/pay/{id}", name="purchase_payment_form")
+     * @IsGranted("ROLE_USER")
+     */
+    public function ShowCardForm($id, PurchaseRepository $purchaseRepository, StripeService $stripeService)
+    {
+        $purchase = $purchaseRepository->find($id);
+
+        if (
+            !$purchase ||
+            ($purchase && $purchase->getUser() !== $this->getUser()) ||
+            ($purchase && $purchase->getStatus() === Purchase::STATUS_PAID)
+        ) {
+            return $this->redirectToRoute('cart_show');
+        }
+
+        $intent = $stripeService->getPaymentIntent($purchase);
+
+
+        return $this->render('purchase/payment.html.twig', [
+            'clientSecret' => $intent->client_secret,
+            'purchase' => $purchase,
+            'stripePublicKey' => $stripeService->getPublicKey()
+        ]);
+    }
+}
+
+<h3>Définition du StripeService dans le fichier services.yaml</h3>
+
+Dans le dossier config, mise en place des clef API de stripe.
+
+App\Stripe\StripeService:
+        arguments:
+            $secretKey: '%env(STRIPE_SECRET_KEY)%'
+            $publicKey: '%env(STRIPE_PUBLIC_KEY)%'
+
+<h3>Refactoring du Javascript</h3>
+
+Créer un dossier JS dans le dossier public puis créer le fichier payment.js
+Dans le quel nous allons metre en place le code de de card.
+Créer un Élément de paiementet montez-le sur l'espace réservé <div>dans votre formulaire de paiement. Cela intègre un iframe avec un formulaire dynamique qui affiche les types de modes de paiement configurés disponibles à partir de PaymentIntent, permettant à votre client de sélectionner un mode de paiement. Le formulaire collecte automatiquement les détails des paiements associés pour le type de mode de paiement sélectionné.
+
+const stripe = Stripe(stripePublicKey);
+
+const elements = stripe.elements();
+
+const card = elements.create("card");
+// Stripe injects an iframe into the DOM
+card.mount("#card-element");
+
+card.on("change", function (event) {
+    // Disable the Pay button if there are no card details in the Element
+    document.querySelector("button").disabled = event.empty;
+    document.querySelector("#card-error").textContent = event.error ? event.error.message : "";
+});
+
+
+const form = document.getElementById("payment-form");
+
+form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    // Complete payment when the submit button is clicked
+    //payWithCard(stripe, card, data.clientSecret);
+    stripe
+        .confirmCardPayment(clientSecret, {
+            payment_method: {
+                card: card
+            }
+        })
+        .then(function (result) {
+            if (result.error) {
+                // Show error to your customer
+                console.log(result.error.message);
+            } else {
+                // The payment succeeded!
+                window.location.href = redirectAfterSuccessUrl;
+            }
+        });
+
+});
+
+Dans le fichier payment.html.twig importation des élèment
+{% extends "base.html.twig" %}
+
+{% block titel %}
+	Payer votre commande avec stripe
+{% endblock %}
+
+{% block body %}
+
+	<h1>Payer votre commande avec Stripe</h1>
+    // Mise en place d'une page de paiement sur le client
+    //Définir le formulaire de paiement
+	<form id="payment-form">
+		<h3>Entrée votre numéro de carte</h3>
+		<div
+			class='container' id="card-element">
+			<!--Stripe.js injects the Payment Element-->
+			<h3>cart</h3>
+		</div>
+		<hr>
+		<button id="submit" class="btn btn-success">
+			<div class="spinner hidden" id="spinner"></div>
+			<span id="button-text">Payer avec stripe !</span>
+		</button>
+		<p id="card-error" role="alert"></p>
+		<div id="card-message" class="hidden"></div>
+	</form>
+    //Charger Stripe.js
+    //Utilisez Stripe.js pour rester conforme à la norme PCI en vous assurant que les détails de 
+    //paiement sont envoyés directement à Stripe sans toucher votre serveur.
+	<script src="https://js.stripe.com/v3/"></script>
+    //
+	<script src="/js/payment.js"></script>
+
+{% endblock %}
+
+{% block javascripts %}
+	{{ parent() }}
+	<script>
+        //Initialisez Stripe.js avec vos clés API
+		const clientSecret = '{{ clientSecret }}';  
+        const stripePublicKey = '{{ stripePublicKey }}';
+        //redirection après le paiement réussi
+        const redirectAfterSuccessUrl = "{{ url('purchase_payment_success', { 'id': purchase.id }) }}"
+	</script>
+{% endblock %}
+
+<h3>Stocker les clés Stripes dans des variables d'environnement (.env)</h3>
+
+Pour evité de faire les changements en le mode development et le mode production. Pour la gestion des clef API.
+Il faut les mettre en place dans le fichier .env.
+
+STRIPE_PUBLIC_KEY="pk_test_51Iil1QJGVAs2Om8revWfx73zmkXeGt6VLJkicoPiTwXQ18gr5GTLoFFIQ7IVVM8Brxvvb8VOypvpLM9wBC3rwoEl00lsfFYuOa"
+STRIPE_SECRET_KEY="sk_test_51Iil1QJGVAs2Om8rquD7QN41xXVIhaBnLoBD53mCJzl86hQsSreAOjN3E9geTj8C9dMojtDTAFVfhokKXgkrBLFU00i9UiavPu"
+
+Gestion des clefs API:
+Dans le dossier config, mise en place des clef API de stripe.
+
+App\Stripe\StripeService:
+        arguments:
+            $secretKey: '%env(STRIPE_SECRET_KEY)%'
+            $publicKey: '%env(STRIPE_PUBLIC_KEY)%'
+
+<h3>Etudiez les Webhooks de Stripe !</h3>
+
+Pour l'instant notre système n'est pas très sécurisé : si le client connait l'adresse à appeler pour faire passer une commande au statut PAID, il peut le faire alors même qu'il n'a pas payé la commande.
+
+C'est la principale raison d'étudier les WebHooks pour sécuriser ce point là et ne plus avoir un moyen aussi simple de faire passer la commande en statut PAID !
+
+Stripe peut appeler votre site quand un paiement est fait, de telle sorte que ce ne soit pas le client dans son navigateur qui fasse passer la commande au statut PAID mais uniquement Stripe qui est au courant d'une adresse qu'il peut contacter pour compléter un paiement !
+
+📖 Documentation sur les WebHooks : https://stripe.com/docs/payments/checkout/fulfill-orders
+
+
+<h2>Symfony et les événements (1 heure et 15 minutes)</h2>
+
+<h3>Introduction aux événements dans Symfony</h3>
+https://sites.google.com/site/symfonikhal/p4-allez-plus-loin/5-le-gestionnaire-d-evenements
+
+<h3>Prérequis : passages par valeur / référence</h3>
+https://www.php.net/manual/fr/language.references.pass.php
+http://www.lephpfacile.com/manuel-php/language.references.pass.php
+
+
+<h3>Le design pattern Mediator</h3>
+https://symfony.com/doc/current/components/event_dispatcher.html
+https://www.babeuloula.fr/blog/le-design-pattern-strategy-dans-symfony.html
+
+<h3>Voir les événements et les réactions dans le profiler</h3>
+https://symfony.com/doc/current/event_dispatcher.html
+
+<h3>Plongée dans le coeur de Symfony : le Kernel et les événements</h3>
+https://symfony.com/doc/current/reference/events.html
+
+<h3>Création de notre premier Listener</h3>
+
+Dans ProductController.php nous appellons la request.
+
+    /**
+     * @Route("/{category_slug}/{slug}", name="product_show", priority=-2)
+     */
+    public function show($slug, ProductRepository $productRepository, Request $request): Response
+    {
+        dd($request->attributes);
+        
+        $product = $productRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si le produit n'existe pas, alors il vas vers une erreur.
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit demandé n'exite pas");
+        }
+
+        return $this->render('product/show.html.twig', [
+            'product' => $product
+        ]);
+    }
+
+On obtient les attributs de la requête dans la méthode show.
+On retrouve les informations de l'attribut de la requette.
+
+ProductController.php on line 50:
+Symfony\Component\HttpFoundation\ParameterBag {#96 ▼
+  #parameters: array:7 [▼
+    "_route" => "product_show"
+    "_controller" => "App\Controller\ProductController::show"
+    "category_slug" => "baby"
+    "slug" => "lightweight-wool-gloves"
+    "_route_params" => array:2 [▼
+      "category_slug" => "baby"
+      "slug" => "lightweight-wool-gloves"
+    ]
+    "_firewall_context" => "security.firewall.map.context.main"
+    "_access_control_attributes" => null
+  ]
+}
+
+Mais ont peu passé n'importe quel attribut de la requête.
+
+    /**
+     * @Route("/{category_slug}/{slug}", name="product_show", priority=-2)
+     */
+    public function show($slug, $category_slug, ProductRepository $productRepository, Request $request): Response
+    {
+        dump($category_slug);
+
+        dd($request->attributes);
+
+        $product = $productRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si le produit n'existe pas, alors il vas vers une erreur.
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit demandé n'exite pas");
+        }
+
+        return $this->render('product/show.html.twig', [
+            'product' => $product
+        ]);
+    }
+
+Symfony à était capable de donner $category_slug et $slug.
+
+dump($category_slug);
+dd($request->attributes);
+
+Grace à l'argumente résolver ont n'est capable de donner tout les informations qui sont utilisées.
+
+ProductController.php on line 50:
+"baby"
+ProductController.php on line 52:
+Symfony\Component\HttpFoundation\ParameterBag {#96 ▼
+  #parameters: array:7 [▼
+    "_route" => "product_show"
+    "_controller" => "App\Controller\ProductController::show"
+    "category_slug" => "baby"
+    "slug" => "lightweight-wool-gloves"
+    "_route_params" => array:2 [▼
+      "category_slug" => "baby"
+      "slug" => "lightweight-wool-gloves"
+    ]
+    "_firewall_context" => "security.firewall.map.context.main"
+    "_access_control_attributes" => null
+  ]
+}
+
+Maintenant si on lui demande la variable $prenom il ne vas pas trouver la variable.
+
+    /**
+     * @Route("/{category_slug}/{slug}", name="product_show", priority=-2)
+     */
+    public function show($slug, $prenom, ProductRepository $productRepository, Request $request): Response
+    {
+        dd($request->attributes);
+
+        $product = $productRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si le produit n'existe pas, alors il vas vers une erreur.
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit demandé n'exite pas");
+        }
+
+        return $this->render('product/show.html.twig', [
+            'product' => $product
+        ]);
+    }
+
+L'agument resolver n'est pas capable de donner tout les informations qui sont utilisées. $prenom n'est pas trouvé.
+Il affiche le message d'erreur.
+Controller "App\Controller\ProductController::show()" requires that you provide a value for the "$prenom" argument. Either the argument is nullable and no null value has been provided, no default value has been provided or because there is a non optional argument after this one.
+
+L'argument resolver est capable de passé à tout mes controller des donner qui son dans les attributs de la requete.
+Pour donner un exemple concrait il serait bien d'avoir un prenom dans les attributs de la requete.
+Creation du dossier EventListener puis un fichier PrenomListener.php.
+
+<?php
+
+namespace App\EventsDispatcher;
+
+class PrenomListener
+{
+    public function addPrenomToAtributes()
+    {
+        dd('ca fonctionne');
+    }
+}
+
+Tachon de voir si il apparait quand on fait appel de 
+
+php bin/console debug:event-dispatcher kernel.request
+
+Registered Listeners for "kernel.request" Event
+===============================================
+
+ ------- ---------------------------------------------------------------------------------------------- ----------
+  Order   Callable                                                                                       Priority 
+ ------- ---------------------------------------------------------------------------------------------- ----------
+  #1      Symfony\Component\HttpKernel\EventListener\DebugHandlersListener::configure()                  2048
+  #2      Symfony\Component\HttpKernel\EventListener\ValidateRequestListener::onKernelRequest()          256
+  #3      Symfony\Component\HttpKernel\EventListener\SessionListener::onKernelRequest()                  128
+  #4      Symfony\Component\HttpKernel\EventListener\LocaleListener::setDefaultLocale()                  100
+  #5      Symfony\Component\HttpKernel\EventListener\RouterListener::onKernelRequest()                   32
+  #6      Symfony\Component\HttpKernel\EventListener\LocaleListener::onKernelRequest()                   16
+  #7      Symfony\Component\HttpKernel\EventListener\LocaleAwareListener::onKernelRequest()              15
+  #8      Symfony\Bundle\SecurityBundle\Debug\TraceableFirewallListener::configureLogoutUrlGenerator()   8
+  #9      Symfony\Bundle\SecurityBundle\Debug\TraceableFirewallListener::onKernelRequest()               8
+ ------- ---------------------------------------------------------------------------------------------- ----------
+
+Ont se rend compte que la class PrenomListener n'apparait pas. La raisont est que nous n'avons jamais 
+prévenue que nous avions brancher le listener PrenomListener.
+Pour le prévenir c'est assez symple il suffit de le déclarer dans le fichier services.yaml.
+
+    App\EventDispatcher\PrenomListener:
+        tags: 
+            [
+                {
+                    name: kernel.event_listener, 
+                    event: kernel.request, 
+                    method: addPrenomToAtributes,
+                },
+            ]
+
+php bin/console debug:event-dispatcher kernel.request
+
+------- ---------------------------------------------------------------------------------------------- ---------- 
+  Order   Callable                                                                                       Priority  
+ ------- ---------------------------------------------------------------------------------------------- ----------
+  #1      Symfony\Component\HttpKernel\EventListener\DebugHandlersListener::configure()                  2048
+  #2      Symfony\Component\HttpKernel\EventListener\ValidateRequestListener::onKernelRequest()          256       
+  #3      Symfony\Component\HttpKernel\EventListener\SessionListener::onKernelRequest()                  128       
+  #4      Symfony\Component\HttpKernel\EventListener\LocaleListener::setDefaultLocale()                  100
+  #5      Symfony\Component\HttpKernel\EventListener\RouterListener::onKernelRequest()                   32
+  #6      Symfony\Component\HttpKernel\EventListener\LocaleListener::onKernelRequest()                   16
+  #7      Symfony\Component\HttpKernel\EventListener\LocaleAwareListener::onKernelRequest()              15
+  #8      Symfony\Bundle\SecurityBundle\Debug\TraceableFirewallListener::configureLogoutUrlGenerator()   8
+  #9      Symfony\Bundle\SecurityBundle\Debug\TraceableFirewallListener::onKernelRequest()               8
+  #10     App\EventDispatcher\PrenomListener::addPrenomToAtributes()                                     0
+ ------- ---------------------------------------------------------------------------------------------- ----------
+Maintenant App\EventDispatcher\PrenomListener::addPrenomToAtributes() apparait bien.
+
+Maintenant le dd('ca fonctionne') apparait sur la page.
+
+PrenomListener.php on line 9:
+"ca fonctionne"
+
+Donc on peux recevoir la RequestEvent.    
+
+<?php
+
+namespace App\EventDispatcher;
+
+use Symfony\Component\HttpKernel\Event\RequestEvent;
+
+class PrenomListener
+{
+    public function addPrenomToAtributes(RequestEvent $requestEvent)
+    {
+        dd($requestEvent);
+    }
+}
+
+Qu'affiche le dd ,la request.
+
+PrenomListener.php on line 11:
+Symfony\Component\HttpKernel\Event\RequestEvent {#4760 ▼
+  -response: null
+  -kernel: Symfony\Component\HttpKernel\HttpKernel {#1013 ▶}
+  -request: Symfony\Component\HttpFoundation\Request {#51 ▼
+    +attributes: Symfony\Component\HttpFoundation\ParameterBag {#96 ▶}
+    +request: Symfony\Component\HttpFoundation\ParameterBag {#103 ▶}
+    +query: Symfony\Component\HttpFoundation\InputBag {#97 ▶}
+    +server: Symfony\Component\HttpFoundation\ServerBag {#93 ▶}
+    +files: Symfony\Component\HttpFoundation\FileBag {#94 ▶}
+    +cookies: Symfony\Component\HttpFoundation\InputBag {#95 ▶}
+    +headers: Symfony\Component\HttpFoundation\HeaderBag {#92 ▶}
+    #content: null
+    #languages: null
+    #charsets: null
+    #encodings: null
+    #acceptableContentTypes: null
+    #pathInfo: "/baby/lightweight-wool-gloves"
+    #requestUri: "/baby/lightweight-wool-gloves"
+    #baseUrl: ""
+    #basePath: null
+    #method: "GET"
+    #format: null
+    #session: Closure() {#5866 ▶}
+    #locale: null
+    #defaultLocale: "en"
+    -preferredFormat: null
+    -isHostValid: true
+    -isForwardedValid: true
+    -isSafeContentPreferred: null
+    basePath: ""
+    format: "html"
+  }
+  -requestType: 1
+  -propagationStopped: false
+}
+
+Maintenant nous allons attribuer un prenon dans PrenomListener.
+
+<?php
+
+namespace App\EventDispatcher;
+
+use Symfony\Component\HttpKernel\Event\RequestEvent;
+
+class PrenomListener
+{
+    public function addPrenomToAtributes(RequestEvent $requestEvent)
+    {
+        $requestEvent->getRequest()->attributes->set('prenom', 'Rodolphe');
+        dd($requestEvent->getRequest());
+}
+
+Quand on fais le dd($requestEvent->getRequest()) on a le prenom.
+
+PrenomListener.php on line 12:
+Symfony\Component\HttpFoundation\Request {#51 ▼
+  +attributes: Symfony\Component\HttpFoundation\ParameterBag {#96 ▼
+    #parameters: array:8 [▼
+      "_route" => "product_show"
+      "_controller" => "App\Controller\ProductController::show"
+      "category_slug" => "baby"
+      "slug" => "lightweight-wool-gloves"
+      "_route_params" => array:2 [▶]
+      "_firewall_context" => "security.firewall.map.context.main"
+      "_access_control_attributes" => null
+      "prenom" => "Rodolphe"
+    ]
+  }
+  +request: Symfony\Component\HttpFoundation\ParameterBag {#103 ▶}
+  +query: Symfony\Component\HttpFoundation\InputBag {#97 ▶}
+  +server: Symfony\Component\HttpFoundation\ServerBag {#93 ▶}
+  +files: Symfony\Component\HttpFoundation\FileBag {#94 ▶}
+  +cookies: Symfony\Component\HttpFoundation\InputBag {#95 ▶}
+  +headers: Symfony\Component\HttpFoundation\HeaderBag {#92 ▶}
+  #content: null
+  #languages: null
+  #charsets: null
+  #encodings: null
+  #acceptableContentTypes: null
+  #pathInfo: "/baby/lightweight-wool-gloves"
+  #requestUri: "/baby/lightweight-wool-gloves"
+  #baseUrl: ""
+  #basePath: null
+  #method: "GET"
+  #format: null
+  #session: Closure() {#157 ▶}
+  #locale: null
+  #defaultLocale: "en"
+  -preferredFormat: null
+  -isHostValid: true
+  -isForwardedValid: true
+  -isSafeContentPreferred: null
+  basePath: ""
+  format: "html"
+}
+
+
+Les paramétres sont passées l'agumente resolver sera capable de les afficher 
+que si il font partie des attributs.
+
+/**
+     * @Route("/{category_slug}/{slug}", name="product_show", priority=-2)
+     */
+    public function show($slug, $prenom, ProductRepository $productRepository, Request $request): Response
+    {
+        dd($request->attributes);
+
+        $product = $productRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si le produit n'existe pas, alors il vas vers une erreur.
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit demandé n'exite pas");
+        }
+
+        return $this->render('product/show.html.twig', [
+            'product' => $product
+        ]);
+    }
+
+Maintenant on suprimme de dd($request->attributes) le prenom.
+<?php
+
+namespace App\EventDispatcher;
+
+use Symfony\Component\HttpKernel\Event\RequestEvent;
+
+class PrenomListener
+{
+    public function addPrenomToAtributes(RequestEvent $requestEvent)
+    {
+        $requestEvent->getRequest()->attributes->set('prenom', 'Rodolphe');
+    }
+}
+
+Et dans le ProductController on ajoute le dd('prenom').
+
+    /**
+     * @Route("/{category_slug}/{slug}", name="product_show", priority=-2)
+     */
+    public function show($slug, $prenom, ProductRepository $productRepository, Request $request): Response
+    {
+        dd($prenom);
+
+        $product = $productRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si le produit n'existe pas, alors il vas vers une erreur.
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit demandé n'exite pas");
+        }
+
+        return $this->render('product/show.html.twig', [
+            'product' => $product
+        ]);
+    }
+
+Le dd('prenom') est maintenant affiché.
+
+ProductController.php on line 50:
+"Rodolphe"
+
+Maintenant si je le souhaite je peux retrouver dans tout mes controller le $prenom.
+Si j'ai besoin d'une info dans d'un projet je peu le rajouter dans mon controller.
+
+<h3>Découverte et création de notre premier Subscriber</h3>
+
+Maintenant nous allons tester des events.   
+Reprenons PrenomListener.php
+
+<?php
+
+namespace App\EventDispatcher;
+
+use Symfony\Component\HttpKernel\Event\RequestEvent;
+
+class PrenomListener
+{
+    public function addPrenomToAtributes(RequestEvent $requestEvent)
+    {
+        $requestEvent->getRequest()->attributes->set('prenom', 'Rodolphe');
+    }
+    // Nouveau test.
+    public function test1()
+    {
+        dump('test1');
+    }
+
+    public function test2()
+    {
+        dump('test2');
+    }
+}
+
+Dans le service container on ajoute le test1 et le test2.
+
+App\EventDispatcher\PrenomListener:
+        tags: 
+            [
+                {
+                    name: kernel.event_listener, 
+                    event: kernel.request, 
+                    method: addPrenomToAtributes,
+                },
+                {
+                    name: kernel.event_listener,
+                    event: kernel.controller,
+                    method: test1
+                },
+                {
+                    name: kernel.event_listener,
+                    event: kernel.response,
+                    method: test2
+                },
+            ]
+
+Maintenat sur la page du site web dans la barre de controle de php nous voyons une sible.
+Qui représente les dumps test1 et test2.
+
+Si nous appellon: php bin/console debug:event-dispatcher kernel.controller
+
+Registered Listeners for "kernel.controller" Event
+==================================================
+
+ ------- ----------------------------------------------------------------------------------------------- ---------- 
+  Order   Callable                                                                                        Priority  
+ ------- ----------------------------------------------------------------------------------------------- ----------
+  #1      App\EventDispatcher\PrenomListener::test1()                                                     0
+  #2      Symfony\Bundle\FrameworkBundle\DataCollector\RouterDataCollector::onKernelController()          0
+  #3      Symfony\Component\HttpKernel\DataCollector\RequestDataCollector::onKernelController()           0
+  #4      Sensio\Bundle\FrameworkExtraBundle\EventListener\ControllerListener::onKernelController()       0
+  #5      Sensio\Bundle\FrameworkExtraBundle\EventListener\ParamConverterListener::onKernelController()   0
+  #6      Sensio\Bundle\FrameworkExtraBundle\EventListener\HttpCacheListener::onKernelController()        0
+  #7      Sensio\Bundle\FrameworkExtraBundle\EventListener\TemplateListener::onKernelController()         -128
+ ------- ----------------------------------------------------------------------------------------------- ----------
+
+
+php bin/console debug:event-dispatcher kernel.response 
+
+Registered Listeners for "kernel.response" Event
+================================================
+
+ ------- -------------------------------------------------------------------------------------------- ---------- 
+  Order   Callable                                                                                     Priority  
+ ------- -------------------------------------------------------------------------------------------- ----------
+  #1      App\EventDispatcher\PrenomListener::test2()                                                  0
+  #2      Symfony\Component\HttpKernel\EventListener\ResponseListener::onKernelResponse()              0
+  #3      Symfony\Component\HttpKernel\DataCollector\RequestDataCollector::onKernelResponse()          0
+  #4      Sensio\Bundle\FrameworkExtraBundle\EventListener\HttpCacheListener::onKernelResponse()       0
+  #5      Symfony\Component\Security\Http\RememberMe\ResponseListener::onKernelResponse()              0
+  #6      Symfony\Component\HttpKernel\EventListener\ProfilerListener::onKernelResponse()              -100
+  #7      Symfony\Component\HttpKernel\EventListener\ErrorListener::removeCspHeader()                  -128
+  #8      Symfony\Bundle\WebProfilerBundle\EventListener\WebDebugToolbarListener::onKernelResponse()   -128
+  #9      Symfony\Component\HttpKernel\EventListener\DisallowRobotsIndexingListener::onResponse()      -255
+  #10     Symfony\Component\HttpKernel\EventListener\SessionListener::onKernelResponse()               -1000
+  #11     Symfony\Component\HttpKernel\EventListener\StreamedResponseListener::onKernelResponse()      -1024
+ ------- -------------------------------------------------------------------------------------------- ----------
+
+Donc nous avons des functions test1 et test2 qui sont appelées lorsque nous appelons.
+
+Mais pour appeler chaque function nous sommes pas obliger de les appelées dans le service.yaml.
+Il ne faut plus passer par des listeners mais par de subscribers.
+Dans PrenomListener.php avec EventSubscriberInterface.
+
+<?php
+
+namespace App\EventDispatcher;
+
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpKernel\Event\RequestEvent;
+
+//Grace a cette funtion plus besoin du service.yaml
+
+class PrenomSubscriber implements EventSubscriberInterface
+{
+    public static function getSubscribedEvents()
+    {
+        return [
+            'kernel.request' => 'addPrenomToAttributes',
+            'kernel.controller' => 'test1',
+            'kernel.response' => 'test2',
+        ];
+    }
+
+    public function addPrenomToAtributes(RequestEvent $requestEvent)
+    {
+        $requestEvent->getRequest()->attributes->set('prenom', 'Rodolphe');
+    }
+
+    public function test1()
+    {
+        dump('test1');
+    }
+
+    public function test2()
+    {
+        dump('test2');
+    }
+}
+
+Dans le terminal
+php bin/console debug:event-dispatcher kernel.response
+
+Registered Listeners for "kernel.response" Event
+================================================
+
+ ------- -------------------------------------------------------------------------------------------- ---------- 
+  Order   Callable                                                                                     Priority  
+ ------- -------------------------------------------------------------------------------------------- ----------
+  #1      App\EventDispatcher\PrenomSubscriber::test2()                                                0
+  #2      Symfony\Component\HttpKernel\EventListener\ResponseListener::onKernelResponse()              0
+  #3      Symfony\Component\HttpKernel\DataCollector\RequestDataCollector::onKernelResponse()          0
+  #4      Sensio\Bundle\FrameworkExtraBundle\EventListener\HttpCacheListener::onKernelResponse()       0
+  #5      Symfony\Component\Security\Http\RememberMe\ResponseListener::onKernelResponse()              0
+  #6      Symfony\Component\HttpKernel\EventListener\ProfilerListener::onKernelResponse()              -100
+  #7      Symfony\Component\HttpKernel\EventListener\ErrorListener::removeCspHeader()                  -128
+  #8      Symfony\Bundle\WebProfilerBundle\EventListener\WebDebugToolbarListener::onKernelResponse()   -128      
+  #9      Symfony\Component\HttpKernel\EventListener\DisallowRobotsIndexingListener::onResponse()      -255
+  #10     Symfony\Component\HttpKernel\EventListener\SessionListener::onKernelResponse()               -1000
+  #11     Symfony\Component\HttpKernel\EventListener\StreamedResponseListener::onKernelResponse()      -1024
+ ------- -------------------------------------------------------------------------------------------- ----------
+
+Grace au contener de service, il connais donc quand il vat allée sur le PrenonSubscriber.php
+Il vat remarquer qu'il y a un EventSubscriber donc il vas inscrire c'est classe dans EventDispacher.
+Nous n'avons plus besion d'écrire dans le service.yaml. Il suffit de l'écrire dirrectement dans le php.
+Dans la page web de la barre symfony nous voyons toujours la cible avec le dump test1 et teste2.
+
+Tout sa fonction grace a: autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+Qui se trouve dans le service.yaml.
+Si le desactivons pour PrenomSubscriber.php dans le sevice.yaml.
+App\EventDispatcher\PrenomSubscriber:
+        autoconfigure: false
+
+Il devient indisponible, malger qu'il soit rensseigner dans le fichier PrenomSubscriber.php.
+
+Registered Listeners for "kernel.response" Event
+================================================
+
+ ------- -------------------------------------------------------------------------------------------- ---------- 
+  Order   Callable                                                                                     Priority  
+ ------- -------------------------------------------------------------------------------------------- ----------
+  #1      Symfony\Component\HttpKernel\EventListener\ResponseListener::onKernelResponse()              0
+  #2      Symfony\Component\HttpKernel\DataCollector\RequestDataCollector::onKernelResponse()          0
+  #3      Sensio\Bundle\FrameworkExtraBundle\EventListener\HttpCacheListener::onKernelResponse()       0
+  #4      Symfony\Component\Security\Http\RememberMe\ResponseListener::onKernelResponse()              0
+  #5      Symfony\Component\HttpKernel\EventListener\ProfilerListener::onKernelResponse()              -100
+  #6      Symfony\Component\HttpKernel\EventListener\ErrorListener::removeCspHeader()                  -128
+  #7      Symfony\Bundle\WebProfilerBundle\EventListener\WebDebugToolbarListener::onKernelResponse()   -128
+  #8      Symfony\Component\HttpKernel\EventListener\DisallowRobotsIndexingListener::onResponse()      -255
+  #9      Symfony\Component\HttpKernel\EventListener\SessionListener::onKernelResponse()               -1000
+  #10     Symfony\Component\HttpKernel\EventListener\StreamedResponseListener::onKernelResponse()      -1024
+ ------- -------------------------------------------------------------------------------------------- ----------
+
+<h3>Premier récapitulatif</h3>
+
+<h3>Créons et propageons notre propre événement : le PurchaseEvent</h3>
+
+Nous allons créer un évenement qui, quand une commande est passé, un email sera envoyé au développer.
+Dans le PurchasePayementSuccessController.php nous allons mettre en place 
+
+Creation du dossier Event et dans ce dossier créons PurchaseSucessEvent.php
+Dans le quelle on vas lui passé l'Event.
+
+<?php
+
+namespace App\Event;
+
+use App\Entity\Purchase;
+use Symfony\Contracts\EventDispatcher\Event;
+
+class PurchaseSuccessEvent extends Event
+{
+    private $purchase;
+
+    public function __construct(Purchase $purchase)
+    {
+        $this->purchase = $purchase;
+    }
+
+    public function getPurchase(): Purchase
+    {
+        return $this->purchase;
+    }
+}
+
+Dans le fichier Purchase PurchasePayementSuccessController.php
+//Lancer un événement qui permettre aux autre développer de reagir à la prise d'une commande.
+//Comment emettre un événement grace à l'EventeDispatcherInterface.
+
+<?php
+
+namespace App\Controller\Purchase;
+
+use App\Entity\Purchase;
+use App\Cart\CartService;
+use App\Event\PurchaseSuccessEvent;
+use App\Repository\PurchaseRepository;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Routing\Annotation\Route;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+
+class PurchasePaymentSuccessController extends AbstractController
+{
+    /**
+     * @Route("/purchase/terminate/{id}", name="purchase_payment_success")
+     * @IsGranted("ROLE_USER")
+     */
+    public function index($id, PurchaseRepository $purchaseRepository, EntityManagerInterface $em, CartService $cartService, EventDispatcherInterface $dispatcher)
+    {
+
+
+        //1. Je récupère la commande
+        $purchase = $purchaseRepository->find($id);
+
+
+        if (
+            !$purchase ||
+            ($purchase && $purchase->getUser() !== $this->getUser()) ||
+            ($purchase && $purchase->getStatus() === Purchase::STATUS_PAID)
+        ) {
+            $this->addFlash('warning', "La commande n'existe pas");
+            return $this->redirectToRoute("purchase_index");
+        }
+        //2. Je la fait passer au status PAYEE (PAID)
+        $purchase->setStatus(Purchase::STATUS_PAID);
+        $em->flush();
+
+        //3. Je vide le panier
+        $cartService->empty();
+
+        //Lancer un événement qui permettre aux autre développer de reagir à la prise d'une commande.
+        //Comment emettre un événement grace à l'EventeDispatcherInterface.
+        $purchaseEvent = new PurchaseSuccessEvent($purchase);
+        $dispatcher->dispatch($purchaseEvent, 'purchase.success');
+
+
+        //4. Je redirige avec un flash vers la liste des commandes
+        $this->addFlash('success', "La commande a été payée et confirmée !");
+        return $this->redirectToRoute("purchase_index");
+    }
+}
+
+<h3>Création d'un Subscriber qui enverra des emails</h3>
+
+Creation s'un fichier PurchaseSuccessEmailSubscriber.php dans le dossier EventDispatcher.
+
+<?php
+
+namespace App\EventDispatcher;
+
+use App\Event\PurchaseSuccessEvent;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+
+class PurchaseSuccessEmailSubscriber implements EventSubscriberInterface
+{
+    public static function getSubscribedEvents()
+    {
+        return [
+            'purchase.success' => 'sendSuccessEmail',
+        ];
+    }
+
+    public function sendPurchaseSuccessEmail(PurchaseSuccessEvent $purchaseSuccessEvent)
+    {
+        dd($purchaseSuccessEvent);
+    }
+}
+
+Nous voyons que notre evennemt est maintenant disponnible.
+php bin/console debug:event-dispatcher purchase.success
+
+Registered Listeners for "purchase.success" Event
+=================================================
+
+ ------- ----------------------------------------------------------------------- ----------
+  Order   Callable                                                                Priority 
+ ------- ----------------------------------------------------------------------- ----------
+  #1      App\EventDispatcher\PurchaseSuccessEmailSubscriber::sendSucessEmail()   0
+ ------- ----------------------------------------------------------------------- ----------
+
+Reprenon le processus de validation de la commande et de la confirmation de la commande.
+Une fois le paiement effectué, nous allons envoyer un email au développeur.
+Voici le retour du dd($purchaseSuccessEvent);
+
+PurchaseSuccessEmailSubscriber.php on line 21:
+App\Event\PurchaseSuccessEvent {#380 ▼
+  -purchase: App\Entity\Purchase {#540 ▼
+    -id: 159
+    -FullName: "toto popo"
+    -address: "10, rue de la marne"
+    -postalCode: "78000"
+    -city: "Paris"
+    -total: 25638
+    -status: "PAID"
+    -user: App\Entity\User {#723 ▼
+      -id: 44
+      -email: "user0@gmail.com"
+      -roles: []
+      -password: "$argon2id$v=19$m=65536,t=4,p=1$YWdBNE9UMFkwZUtFQVFVbQ$rqwg27WnFU/QrqzPmpTkKSP811q4GBtvwVg6rSoSABk"
+      -fullName: "Michelle Normand"
+      -categories: Doctrine\ORM\PersistentCollection {#535 ▶}
+      -purchases: Doctrine\ORM\PersistentCollection {#599 ▶}
+    }
+    -purchasedAT: DateTime @1636735228 {#528 ▶}
+    -purchaseItems: Doctrine\ORM\PersistentCollection {#510 ▶}
+  }
+  -propagationStopped: false
+}
+
+Nous retrouvons tout les informationd pour construire le mail de confirmation.
+Ma purchase et mon utilisateur sont disponible avec le purchaseItem.
+
+Le PurchaseSuccessEmailSubscriber fait partie du container de service, peu se faire livrais des services.
+Avec l'injection de dépendance, nous appelerons le loggerInterface
+
+<?php
+
+namespace App\EventDispatcher;
+
+
+use Psr\Log\LoggerInterface;
+use App\Event\PurchaseSuccessEvent;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+
+class PurchaseSuccessEmailSubscriber implements EventSubscriberInterface
+{
+    protected $logger;
+
+    public function __construct(LoggerInterface $loger)
+    {
+        $this->logger = $loger;
+    }
+
+
+
+    public static function getSubscribedEvents()
+    {
+        return [
+            'purchase.success' => 'sendSuccessEmail'
+        ];
+    }
+
+    public function sendSuccessEmail(PurchaseSuccessEvent $purchaseSuccessEvent)
+    {
+        $this->logger->info("Email envoyé pour la commande n°" . $purchaseSuccessEvent->getPurchase()->getId());
+    }
+}
+
+[Application] Nov 12 16:53:52 |INFO   | APP    Email envoyé pour la commande n°160
 
 
 
