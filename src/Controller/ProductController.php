@@ -3,22 +3,20 @@
 namespace App\Controller;
 
 use App\Entity\Product;
+use App\Event\ProductViewEvent;
 use App\Form\ProductType;
 use App\Repository\ProductRepository;
 use App\Repository\CategoryRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Form\FormFactoryInterface;
-use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\String\Slugger\SluggerInterface;
-use Symfony\Component\Validator\Constraints\GreaterThan;
-use Symfony\Component\Validator\Constraints\LessThanOrEqual;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\Validator\Constraints\Collection;
+
 
 class ProductController extends AbstractController
 {
@@ -45,7 +43,7 @@ class ProductController extends AbstractController
     /**
      * @Route("/{category_slug}/{slug}", name="product_show", priority=-2)
      */
-    public function show($slug, ProductRepository $productRepository, Request $request): Response
+    public function show($slug, ProductRepository $productRepository, EventDispatcherInterface $dispatcher): Response
     {
 
         $product = $productRepository->findOneBy([
@@ -56,6 +54,10 @@ class ProductController extends AbstractController
         if (!$product) {
             throw $this->createNotFoundException("Le produit demandé n'exite pas");
         }
+        //dispatcher dispatche à tout le monde le faite que nous avon un new ProductViewEvent a qui je 
+        //vais passer mon $product avec cette évenement product.view
+        // 3-Le nom de l'événement serait "product.view"
+        $dispatcher->dispatch(new ProductViewEvent($product), 'product.view');
 
         return $this->render('product/show.html.twig', [
             'product' => $product

@@ -8233,6 +8233,183 @@ class PurchaseSuccessEmailSubscriber implements EventSubscriberInterface
 
 [Application] Nov 12 16:53:52 |INFO   | APP    Email envoyé pour la commande n°160
 
+<h3>Rappels sur les principes SOLID</h3>
+
+Nous devons respecter le Singel Responsability Principle: une classe de doit avoir qu'un seul objectif. 
+Les resposabilités doivent être réparties. Une classe une seul responsabilité, une classe fonctionnel 
+donc il ne doit pas être modifier pour ne pas violer le principe S.
+Open / Closed Principle: le comportement d'une classe doit pouvoir évoluer sans qu'on doivent la modifier.
+Il est préférable de créer de nouvelle classe pour faire évoluer les besoins suivant le cycle de vie du projet en prod.
+
+<h3>Versionning avec Git</h3>
+
+git status
+On branch Doctrine
+Your branch is up to date with 'origin/Doctrine'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   .env
+        modified:   README.md
+        modified:   config/services.yaml
+        modified:   src/Controller/ProductController.php
+        modified:   src/Controller/Purchase/PurchasePaymentSuccessController.php
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        src/Event/
+        src/EventDispatcher/
+
+<h3>Conclusion</h3>
+
+Etudier les EventDispatcher, le design Pattern "Mediator"
+Evénement centrale du Mediator et le Dispatcher en lui passent les données de l'événement.
+Symfony puisse nous prevenir à chaque étape du cycle de vie de la requette, quand il trouve le controller à appeler, quand il voit que l'on à trouvé la réponse à renvoyer.
+En créant des Listeners et des Subscriber.
+-Listeners et un classe qui contien une fonction lier par une configuration lier au service.yaml
+Si j'ai une grande quantité de listener, le fichier service.yaml sera trés important.
+Mais en n'un seul coup d'oeil je vois tout les configurations.
+-Subscriber quand à lui sera dans la class directement avec L'EventSubscriberInterface. Sans passer par le service.yaml.
+Tout les classe doivent avoir impérativement L'EventSubscriberInterface et le getSubscribedEvents()
+L'avantage est que l'on n'a plus a alimenter le service.yaml et le surchager. L'inconveignant et qu'il faudra ouvrir tout les class pour voir le quelle pourrait étre modifier.
+Mais on peu faire appel à "php bin/console debug:event-dispatcher" pour voir tout les événements.
+Mais il est préférable de créer des class séparer pour tenir la bonne pratique.
+
+<h3>Exercice  créer un événement ProductViewEvent et y réagir</h3>
+
+Exercice : créer un événement ProductViewEvent et y réagir
+
+Vous devez créer un nouvel événement ProductViewEvent qui sera déclenché à chaque fois qu'on visite la page d'un produit avec le nom d'événement "product.view"
+
+Vous devez aussi créer une réaction à cet événement (un subscriber) qui écrira dans les logs.
+
+Exigences :
+Nouvelle classe ProductViewEvent
+Propagation de l'événement à chaque visite d'un produit sous le nom "product.view"
+Nouveau Subscriber qui écoutera l'événement product.view afin d'écrire une ligne dans les logs
+
+1-Créer un nouvel événement ProductViewEvent
+Creation de la classe ProductViewEvent.php
+
+<?php
+
+namespace App\Event;
+
+use App\Entity\Product;
+use Symfony\Contracts\EventDispatcher\Event;
+// class ProductViewEvent qui vas heriter de la class Event
+class ProductViewEvent extends Event
+{
+    //Ont n'as une donné protéger qui vas s'appaler $product
+    protected $product;
+    // On vas avoir un constructeur qui vas recevoir un $product
+    public function __construct(Product $product)
+    {
+        // Puis se le faire injecter dans le constructeur
+        $this->product = $product;
+    }
+
+    // on vas rendre cette function accessible donc on vas se mettre un getter
+    // Qui retournerat un $product
+    public function getProduct(): Product
+    {
+        // Qui vas retrouner un $this->product.
+        return $this->product;
+    }
+}
+
+2- Lancer cet événement à chaque fois qu'on affiche un produit
+Dans le ProductController.php je créer une fonction qui va appeler l'événement product.view.
+
+use App\Event\ProductViewEvent;
+use Psr\EventDispatcher\EventDispatcherInterface;
+
+    /**
+     * @Route("/{category_slug}/{slug}", name="product_show", priority=-2)
+     */
+    public function show($slug, ProductRepository $productRepository, EventDispatcherInterface $dispatcher): Response
+    {
+
+        $product = $productRepository->findOneBy([
+            'slug' => $slug
+        ]);
+
+        //Si le produit n'existe pas, alors il vas vers une erreur.
+        if (!$product) {
+            throw $this->createNotFoundException("Le produit demandé n'exite pas");
+        }
+        //dispatcher dispatche à tout le monde le faite que nous avon un new ProductViewEvent a qui je 
+        //vais passer mon $product avec cette évenement product.view
+        // 3-Le nom de l'événement serait "product.view"
+        $dispatcher->dispatch(new ProductViewEvent($product), 'product.view');
+
+        return $this->render('product/show.html.twig', [
+            'product' => $product
+        ]);
+    }
+
+
+Brancher l'événement product.view en créant un nous fichier dans le dossier EventSubscriber.
+Dans le dossier EventDispacher je créer un fichier qui va heriter de l'interface EventDispatcherInterface.
+
+<?php
+
+namespace App\EventDispatcher;
+
+use App\Event\ProductViewEvent;
+use Psr\Log\LoggerInterface;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+class ProductViewEmailSubscriber implements EventSubscriberInterface
+{
+    protected $logger;
+
+    public function __construct(LoggerInterface $loger)
+    {
+        $this->logger = $loger;
+    }
+
+    public static function getSubscribedEvents()
+    {
+        return [
+            'product.view' => 'sendEmail',
+        ];
+    }
+
+    public function sendEmail(ProductViewEvent $productViewEvent)
+    {
+        $this->logger->info("Email envoyé à l'admin pour le produit" . $productViewEvent->getProduct()->getId());
+    }
+}
+
+Verifiont que product.view est bien reconnu par symfony.
+php bin/console debug:event-dispatcher product.view
+
+Registered Listeners for "product.view" Event
+=============================================
+
+ ------- ------------------------------------------------------------- ---------- 
+  Order   Callable                                                      Priority  
+ ------- ------------------------------------------------------------- ---------- 
+  #1      App\EventDispatcher\ProductViewEmailSubscriber::sendEmail()   0
+ ------- ------------------------------------------------------------- ----------
+
+Donc oui il est bien reconnu quand il se passera un product.view symfony appellera la fonction sendEmail du subscriber.
+
+Donc quand on fais la simulation sur le site quand ont visite un produit, il va appeler la fonction sendEmail du subscriber.
+Retourn dans les logs :
+[Application] Nov 15 08:29:39 |INFO   | APP    Email envoyé à l'admin pour le produit1270
+
+[Application] Nov 15 08:32:35 |INFO   | APP    Email envoyé à l'admin pour le produit1272
+
+
+
+
+
+
+
+
 
 
 
