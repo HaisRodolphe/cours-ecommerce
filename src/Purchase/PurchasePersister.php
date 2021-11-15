@@ -3,7 +3,6 @@
 namespace App\Purchase;
 
 use App\Cart\CartService;
-use DateTime;
 use App\Entity\Purchase;
 use App\Entity\PurchaseItem;
 use Doctrine\ORM\EntityManagerInterface;
@@ -28,7 +27,6 @@ class PurchasePersister
         // Intégrer tout ce qu'il faut et persister la purchase
         // 6. Nous allons le lier avec l'utilisateur actuellement connecté (Security)
         $purchase->setUser($this->security->getUser())
-            ->setPurchasedAt(new DateTime())
             ->setTotal($this->cartService->getTotal());
 
         $this->em->persist($purchase);

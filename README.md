@@ -8404,6 +8404,284 @@ Retourn dans les logs :
 [Application] Nov 15 08:32:35 |INFO   | APP    Email envoyé à l'admin pour le produit1272
 
 
+<h2>Doctrine et les événements (30 minutes)</h2>
+
+<h3>Introduction au cycle de vie des entités</h3>
+
+<h3>Automatismes dans les entités avec les Lifecycle Callbacks</h3>
+https://symfony.com/doc/current/doctrine/events.html
+https://symfony.com/doc/4.1/doctrine/lifecycle_callbacks.html
+Travaillons sur Purchase.php et sur le datetime dans PurchasePersister.php.
+Nous allons faire en sorte que le datetime de la commande soit automatiquement mis à jour à chaque fois qu'on créer une commande.
+Créer un cycle de vie pour le datetime.
+Grace au cycle de vie nous allons pouvoir nous passer de la ligne ->setPurchasedAt(new DateTime()) dans le PurchasePersister.php.
+Alors comment allons nous faire sa ?
+
+Dans l'entité Purchase.php nous allons brancher des cycle de vie.
+En rajoutant l'annotation @ORM\HasLifecycleCallbacks()
+
+<?php
+
+namespace App\Entity;
+
+use App\Repository\PurchaseRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
+use Doctrine\ORM\Mapping as ORM;
+
+/**
+ * @ORM\Entity(repositoryClass=PurchaseRepository::class)
+ * @ORM\HasLifecycleCallbacks
+ */
+class Purchase
+{
+
+Cela va permettre de créer des fonctions publics que doctrine vas appeler automatiquement 
+en fonction des cycles de vie ciblet.
+    use DateTime;
+
+    /**
+     * @ORM\PrePersist
+     */
+    public function prePersite()
+    {
+        if (empty($this->purchasedAT)) {
+            $this->purchasedAT = new DateTime();
+        }
+    }
+
+Maintenant nous n'avons plus besoin de faire un setter pour le datetime dans PurchasePersister.php.
+Si aucune date préciser dans la commande se sera la date de maintentans. Mais si il y a déja une date sur la commande,
+alors celle ci ne changera pas.
+
+Faisons la même chose pour le Total et créont une function preFluch() dans le Purchase.php
+Grace à * @var Collection<PurchaseItem> nous avons l'autocomplétion.
+
+    /**
+     * @ORM\OneToMany(targetEntity=PurchaseItem::class, mappedBy="purchase", orphanRemoval=true)
+     * @var Collection<PurchaseItem>
+     */
+    private $purchaseItems;
+
+    /**
+     * @ORM\PreFlush
+     */
+    public function preFlush()
+    {   
+        dd($this->purchaseItems);
+
+        $total = 0;
+
+        foreach ($this->purchaseItems as $item) {
+            $total += $item->getTotal();
+        }
+
+        $this->total = $total;
+    }
+
+Mais nous pouvons le faire avec ->setTotal($this->cartService->getTotal()); dans le PurchasePersister.php.
+Il faut bien faire attention au pre-presist.
+Le soucie est que l'enregistrement de la commande reste vide alors dans le PerchaseItem.php il faut prevoir de passé le purchaseItem avant de le persister.
+
+public function setPurchase(?Purchase $purchase): self
+    {
+
+        $this->purchase = $purchase;
+
+        $purchase->addPurchaseItem($this);
+
+        return $this;
+    }
+
+Il faut prévoir un garde fou car elle pourrait etre déja présente purchaseItem.    
+public function setPurchase(?Purchase $purchase): self
+    {
+        $this->purchase = $purchase;
+
+        // si je ne suis pas deja dedans alors je m'y rajoute.
+        if (!$purchase->getPurchaseItems()->contains($this)) {
+            $purchase->addPurchaseItem($this);
+        }
+
+        return $this;
+    }
+
+Teste du dd qui nous renvoie bien la liste de mon panier.
+
+Purchase.php on line 100:
+Doctrine\Common\Collections\ArrayCollection {#778 ▼
+  -elements: array:1 [▼
+    0 => App\Entity\PurchaseItem {#1128 ▼
+      -id: null
+      -product: App\Entity\Product {#1126 ▶}
+      -purchase: App\Entity\Purchase {#796 ▶}
+      -productName: "Heavy Duty Linen Car"
+      -productPrice: 12819
+      -Quantity: 1
+      -total: 12819
+    }
+  ]
+}
+
+L'inconvénient de tout ces callback est qu'il faut aller ouvrir tout les antitées pour savoir si il y des automatismes.
+Ont ne peu pas se faire livréer des service dans les entités.
+
+<h3>Automatismes grâce aux Doctrine Listeners</h3>
+
+Maintenant parlon de Product.php et surtout du slug. Dans les entités en general on ne peu pas se faire livrer des services.
+Donc creer un service sur l'entité n'est pas possible
+On peu créer des dates.
+Nous allons travailler avec les Doctrine Listeners ou Doctrine Subscribers.
+Créont un nouveau dossier dans src Doctrine puis un dossier Listener et un fichier ProductSlugListener.php 
+
+<?php
+
+namespace App\Doctrine\Listener;
+
+use Doctrine\Persistence\Event\LifecycleEventArgs;
+
+class ProductSlugListener
+{
+    public function prePersist(LifecycleEventArgs $event)
+    {
+        dd("Ca marche");
+    }
+}
+
+Dans le service.yaml nous allons brancher 
+
+App\Doctrine\Listener\ProductSlugListener:
+        tags: [{ name: "doctrine.event_listener", event: prePersist }]
+
+Pour voir si cela fonctionne, nous allons balance notre fixture.
+php bin/console d:f:l --no-interaction
+
+    > purging database
+    > loading App\DataFixtures\AppFixtures
+^ "Ca marche"
+
+Creation du slug avec ProductSlugListener.php
+
+<?php
+
+namespace App\Doctrine\Listener;
+
+use App\Entity\Product;
+use Doctrine\Persistence\Event\LifecycleEventArgs;
+use Symfony\Component\String\Slugger\SluggerInterface;
+
+class ProductSlugListener
+{
+    protected $slugger;
+
+    public function __construct(SluggerInterface $slugger)
+    {
+        $this->slugger = $slugger;
+    }
+
+    public function prePersist(LifecycleEventArgs $event)
+    {
+        $entity = $event->getObject();
+
+        if (!$entity instanceof Product) {
+            return;
+        }
+
+        if (empty($entity->getSlug())) {
+            // SluggerInterface creation du slug par rapport au getName() en minuscule
+            $entity->setSlug(strtolower($this->slugger->slug($entity->getName())));
+        }
+    }
+}
+Dans AppFixtures.php nous allons disactiver le ->setSlug(strtolower($this->slugger->slug($product->getName())))
+Pour eviter la creaion du slug.
+
+php bin/console d:f:l --no-interaction aprés l'injection la creation des slugs fonctionne trés bien.
+
+Quand Doctrine vois que l'on fais un persite de quoi que soit il vas appelé la fonction de ProductSlugListener.php
+
+public function prePersist(LifecycleEventArgs $event)
+    {
+        $entity = $event->getObject();
+
+        if (!$entity instanceof Product) {
+            return;
+        }
+
+Mais a chaque fois que nous allons perciter quelque chose cette fonction sera appelé 
+et donc fair baisser les performances du site. Il faut que se soit appeler que quand je créer un produit.
+Donc peu souvant.
+
+<h3>Automatismes grâce au Entity Listeners</h3>
+
+Pour éviter que la creation se face a chaque fois il suffit de modifier la ligne dans le service.yaml
+
+App\Doctrine\Listener\ProductSlugListener:
+        tags: [{ name: "doctrine.orm.entity_listener", event: prePersist ,entity: App\Entity\Product }]
+
+Il suffit d'appeler Produc $entity sur ProductSlugListener.php et nous n'avons plus besoin
+de posé la question est-ce que mon entié est belle est bein un produit, plus maintenant.
+La class ProductSlugListener.php est appelé uniquement au prePersit pour la creation de la fixture,
+pas les autres.
+
+<?php
+
+namespace App\Doctrine\Listener;
+
+use App\Entity\Product;
+use Symfony\Component\String\Slugger\SluggerInterface;
+
+class ProductSlugListener
+{
+    protected $slugger;
+
+    public function __construct(SluggerInterface $slugger)
+    {
+        $this->slugger = $slugger;
+    }
+
+    public function prePersist(Product $entity)
+    {
+
+        if (empty($entity->getSlug())) {
+            // SluggerInterface creation du slug par rapport au getName()
+            $entity->setSlug(strtolower($this->slugger->slug($entity->getName())));
+        }
+    }
+}
+
+<h3>Conclusion et aide à la décision</h3>
+Les Lifecycle Callbacks
+
+Code : fonction à l'interieur des entités et annotées avec l'événement concerné.
+Avantages: comportement centralisés dans la classe de l'entité.
+Inconvénients: impossible d'utiliser des services.
+
+Les Lifecycle Listeners
+
+Code: classes sans aucune particularité.
+Avantages: possibilité de travailler avec nos services !
+inconvénients: impossible de préciser l'entité qui nous intéresse.
+
+Les Entiy Listeners
+
+Code: classe sans aucune particularité.
+Avantages: permet de préciser l'événement et l'entité qui nous intéresse ainsi que de 
+travailler avec nos services.
+
+
+<h3>Exercice : créer un automatisme avec Doctrine</h3>
+Exercice : un slug automatique pour les catégories
+
+Le but est que le slug d'une nouvelle catégorie soit généré automatiquement lorsque l'on persiste une nouvelle catégorie.
+
+Exigences :
+Décidez quel est le meilleur moyen pour y arriver : LifecycleCallbacks, Lifecycle Listener ou Entity Listener ?
+Décidez à quel événement du cycle de vie vous voulez vous intéresser
+Mettez en place l'automatisme
+
+
+
 
 
 

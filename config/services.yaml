@@ -52,5 +52,9 @@ services:
     App\EventDispatcher\PrenomSubscriber:
         autoconfigure: false
 
+    App\Doctrine\Listener\ProductSlugListener:
+        tags: [{ name: "doctrine.orm.entity_listener", event: prePersist ,entity: App\Entity\Product }]
 
+    App\Doctrine\Listener\CategorySlugListener:
+        tags: [{ name: "doctrine.orm.entity_listener", event: prePersist ,entity: App\Entity\Category }]    
 
