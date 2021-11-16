@@ -1,0 +1,27 @@
+{% extends "base.html.twig" %}
+
+{% block title %}
+	Modification d'une category
+	{{ category.name }}
+{% endblock %}
+
+{% block body %}
+	<h1>Modifier
+		{{ category.name }}
+	</h1>
+	{{ form_start(formView, {'attr': {'novalidate': 'novalidate'}}) }}
+
+	{{ form_errors(formView) }}
+	<div class="row">
+		<div class="col">
+			{{ form_row(formView.name) }}
+		</div>
+	</div>
+	<br>
+	<button type="submit" class="btn btn-primery">
+		<i class="fas fa-save"></i>
+		Modifier la categorie
+	</button>
+
+	{{ form_end(formView) }}
+{% endblock %}
