@@ -8681,6 +8681,383 @@ Décidez à quel événement du cycle de vie vous voulez vous intéresser
 Mettez en place l'automatisme
 
 
+Creation dans le dossier Doctrine\Listener le fichier CategorySlugListener.php
+
+<?php
+
+namespace App\Doctrine\Listener;
+
+use App\Entity\Category;
+use Symfony\Component\String\Slugger\SluggerInterface;
+
+class CategorySlugListener
+{
+    protected $slugger;
+
+    public function __construct(SluggerInterface $slugger)
+    {
+        $this->slugger = $slugger;
+    }
+
+    public function prePersist(Category $category)
+    {
+
+        if (empty($category->getSlug())) {
+            // SluggerInterface creation du slug par rapport au getName()
+            $category->setSlug(strtolower($this->slugger->slug($category->getName())));
+        }
+    }
+}
+
+Puis declarer le fichier CategorySlugListener.php dans le service.yaml
+
+App\Doctrine\Listener\CategorySlugListener:
+        tags: [{ name: "doctrine.orm.entity_listener", event: prePersist ,entity: App\Entity\Category }]
+
+Dans le AppFixtures.php desactiver le ->setSlug(strtolower($this->slugger->slug($category->getName())))
+
+//Creation de 3 category avec trois nom au hasart.
+        for ($c = 0; $c < 3; $c++) {
+            $category = new Category;
+            $category->setName($faker->department);
+                //->setSlug(strtolower($this->slugger->slug($category->getName())));
+
+            $manager->persist($category);
+
+<h2>Versionning avec Git</h2>
+
+git status
+On branch Doctrine
+Your branch is up to date with 'origin/Doctrine'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   README.md
+        modified:   config/services.yaml
+        modified:   src/DataFixtures/AppFixtures.php
+        modified:   src/Entity/Purchase.php
+        modified:   src/Entity/PurchaseItem.php
+        modified:   src/Purchase/PurchasePersister.php
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        src/Doctrine/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+git add .
+git commit -m "Mise en place des cycles de vie Doctrine"
+
+<h2>Les emails avec le composant Mailer (35 minutes)</h3>
+
+<h3>Symfony Mailer : introduction</h3>
+Utilisation du composant symfony/mailer.
+-Mailer : est un service qui permet d'envoyer des emails.
+-Transport : est un service qui permet de configurer le transport de l'email.
+    -Les transports : tuyaux qui font circuler les emails.
+        -smtp : transport par lequel les emails sont envoyés.
+        -Gmail : transport par lequel les emails sont envoyés.
+        -Mailgun : transport par lequel les emails sont envoyés.
+        -MailChimp : transport par lequel les emails sont envoyés.
+Mais vous pouvez créer votre propre transport par une classe pour realiser les transports.
+
+Documentation officielle de Symfony à propos du Mailer : 
+https://symfony.com/doc/current/mailer.html
+
+Nous allons utiliser Mailtrap.io !
+
+<h3>Tester l'envoi des emails avec Mailtrap.io</h3>
+▶ Mailtrap.io : https://mailtrap.io
+
+
+<h3>Installation du composant Mailer</h3>
+composer require mailer
+
+Some files may have been created or updated to configure your new packages.
+Please review, edit and commit them: these files are yours.
+
+   You're ready to send emails.
+
+   If you want to send emails via a supported email provider, install
+    the corresponding bridge.
+    For instance, composer require mailgun-mailer for Mailgun.
+
+   If you want to send emails asynchronously:
+
+    1. Install the messenger component by running composer require messenger;
+    2. Add 'Symfony\Component\Mailer\Messenger\SendEmailMessage': amqp to the
+       config/packages/messenger.yaml file under framework.messenger.routing
+       and replace amqp with your transport name of choice.
+
+   Read the documentation at https://symfony.com/doc/master/mailer.html
+ Dans le fichier .env maintenant il est installer:
+###> symfony/mailer ###
+# MAILER_DSN=smtp://localhost
+Dans le dossier config maintenant on trouve le fichier mailer.yaml
+
+Mais si vous avez besoin de plus d'infmation sur mailer:
+php bin/console debug:config framework mailer
+
+Current configuration for "framework.mailer"
+============================================
+
+dsn: '%env(MAILER_DSN)%'
+enabled: true
+message_bus: null
+transports: {  }
+
+Pour savoir quel service est installer pour le mailer:
+php bin/console debug:autowiring mail
+
+Autowirable Types
+=================
+
+ The following classes & interfaces can be used as type-hints when autowiring:
+ (only showing classes/interfaces matching mail)
+
+ Interface for mailers able to send emails synchronous and/or asynchronous.
+ Symfony\Component\Mailer\MailerInterface (mailer.mailer)
+
+ Interface for all mailer transports.
+ Symfony\Component\Mailer\Transport\TransportInterface (mailer.default_transport)
+
+ 2 more concrete services would be displayed when adding the "--all" option.
+
+<h3>Envoyer notre premier email !</h3>
+
+Test pour l'envoi d'un email avec le mailer.
+Rendez-vous dans le fichier ProductViewEmailSubscriber.php pour realiser un exemple.
+dans le .env:
+###> symfony/mailer ###
+MAILER_DSN=smtp://39c5acad0285c0:cae0db52dd1e76@smtp.mailtrap.io:2525?encryption=tls&auth_mode=login
+
+Dans le ProductViewEmailSubscriber.php
+<?php
+
+namespace App\EventDispatcher;
+
+use Psr\Log\LoggerInterface;
+use App\Event\ProductViewEvent;
+use Symfony\Component\Mime\Email;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\Mime\Address;
+
+class ProductViewEmailSubscriber implements EventSubscriberInterface
+{
+    protected $logger;
+    protected $mailer;
+
+    public function __construct(LoggerInterface $loger, MailerInterface $mailer)
+   
+    {
+        $this->logger = $loger;
+        $this->mailer = $mailer;
+    }
+
+    public static function getSubscribedEvents()
+    {
+        return [
+            'product.view' => 'sendEmail',
+        ];
+    }
+
+    public function sendEmail(ProductViewEvent $productViewEvent)
+    {
+        $email = new Email;
+        $email->from(new Address("contact@mail.com", "Infos de la boutique"))
+            ->to("admin@mail.com")
+            ->text("Un visiteur est en train de voir la page du produit n°" . $productViewEvent->getProduct()->getId())
+            ->subject("Visite du produit n°" . $productViewEvent->getProduct()->getId());
+
+        //Envoie de l'email
+        $this->mailer->send($email);    
+
+        $this->logger->info("Email envoyé à l'admin pour le produit" . $productViewEvent->getProduct()->getId());
+    }
+}
+
+Pour avoir un email plus propre vous utilisez la function html()
+
+public function sendEmail(ProductViewEvent $productViewEvent)
+    {
+        $email = new Email;
+        $email->from(new Address("contact@mail.com", "Infos de la boutique"))
+            ->to("admin@mail.com")
+            ->text("Un visiteur est en train de voir la page du produit n°" . $productViewEvent->getProduct()->getId())
+            ->html("<h1>Visite du produit {$productViewEvent->getProduct()->getId()}</h1>")
+            ->subject("Visite du produit n°" . $productViewEvent->getProduct()->getId());
+
+        //Envoie de l'email
+        $this->mailer->send($email);    
+
+        $this->logger->info("Email envoyé à l'admin pour le produit" . $productViewEvent->getProduct()->getId());
+    }
+}
+
+<h3>Créer des emails en HTML via Twig et le TemplatedEmail</h3>
+Dans le fichier ProductViewEmailSubscriber.php
+
+public function sendEmail(ProductViewEvent $productViewEvent)
+    {
+    +   $email = new TemplatedEmail();
+        $email->from(new Address("contact@mail.com", "Infos de la boutique"))
+        ->to("admin@mail.com")
+        ->text("Un visiteur est en train de voir la page du produit n°" . $productViewEvent->getProduct()->getId())
+          + ->htmlTemplate('emails/product_view.html.twig')
+          + ->context([
+                'product' => $productViewEvent->getProduct(),
+            ])
+            ->subject("Visite du produit n°" . $productViewEvent->getProduct()->getId());
+
+        //Envoie de l'email
+        $this->mailer->send($email);    
+
+        $this->logger->info("Email envoyé à l'admin pour le produit" . $productViewEvent->getProduct()->getId());
+    }
+}
+Puis nous créont dans template un fichier emails/product_view.html.twig
+Detail de l'email et des informations à afficher sur le mail.
+<h1>Visite du produit :
+	{{ product.name }}
+</h1>
+
+<h2>Détails du produit :</h2>
+
+<ul>
+	<li>Prix :
+		{{ product.price }}</li>
+	<li>Slug :
+		{{ product.name }}
+	</li>
+</ul>
+
+<h3>Envoyer un email de confirmation lors d'une commande</h3>
+Mise en place dans le PurchaseSuccessEmailSubscriber.php de l'envois d'un email de confirmation lors d'une commande.
+
+<?php
+
+namespace App\EventDispatcher;
+
+
+use Psr\Log\LoggerInterface;
+use App\Event\PurchaseSuccessEvent;
+use Symfony\Component\Mime\Address;
+use Symfony\Bridge\Twig\Mime\TemplatedEmail;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Security\Core\Security;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+
+class PurchaseSuccessEmailSubscriber implements EventSubscriberInterface
+{
+    protected $logger;
+    protected $mailer;
+    protected $security;
+
+    public function __construct(LoggerInterface $loger, MailerInterface $mailer, Security $security)
+    {
+        $this->logger = $loger;
+        $this->mailer = $mailer;
+        $this->security = $security;
+    }
+
+
+    public static function getSubscribedEvents()
+    {
+        return [
+            'purchase.success' => 'sendSuccessEmail'
+        ];
+    }
+
+    public function sendSuccessEmail(PurchaseSuccessEvent $purchaseSuccessEvent)
+    {
+        // 1. Récupérer l'utilisateur actuellement en ligne (pour connaitre son adresse)
+        // Security
+        /** @var User */
+        $currentUser = $this->security->getUser();
+
+        // 2. Récupérer la commande (je le trouverai dans le PurchaseSuccessEvent)
+        $purchase = $purchaseSuccessEvent->getPurchase();
+
+        // 3. Ecrire le mail (nouveau TemplatedEmail)
+        $email = new TemplatedEmail();
+        $email->to(new Address($currentUser->getEmail(), $currentUser->getFullName()))
+            ->from("contact@mail.com")
+            ->subject("Bravo, votre commande ({$purchase->getId()}) à bien été confirmée")
+            ->htmlTemplate('emails/purchase_success.html.twig')
+            ->context([
+                'purchase' => $purchase,
+                'user' => $currentUser,
+            ]);
+
+        // 4. Envoyer le mail
+
+        $this->mailer->send($email);
+        // MailerInterface
+
+        $this->logger->info("Email envoyé pour la commande n°" . $purchaseSuccessEvent->getPurchase()->getId());
+    }
+}
+
+Creation du fichier emails/purchase_success.html.twig
+Construction de l'email de confirmation de commande.
+
+<h1>Bravo pour votre commande n°
+	{{ purchase.id }}</h1>
+
+<p>Merci à vous
+	{{ user.fullName }}</p>
+
+<table>
+	<thead>
+		<th>Produit</th>
+		<th>Quantité</th>
+		<th>P.U.</th>
+		<th>Total</th>
+	</thead>
+	<tbody>
+		{% for item in purchase.purchaseItems %}
+			<tr>
+				<td>
+					{{ item.productName }}
+				</td>
+				<td>
+					{{ item.quantity }}
+				</td>
+				<td>
+					{{ item.productPrice / 100 }}
+					€
+				</td>
+				<td>
+					{{ item.total / 100 }}
+					€
+				</td>
+			</tr>
+		{% endfor %}
+	</tbody>
+	<tfoot>
+		<tr>
+			<td colspan="3">Total :</td>
+			<td>
+				{{ purchase.total / 100 }}
+				€
+			</td>
+		</tr>
+	</tfoot>
+</table>
+
+<h3>Conclusion</h3>
+
+
+
+
+
+
+
+
+
+
 
 
 
