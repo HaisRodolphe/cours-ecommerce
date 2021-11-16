@@ -9048,15 +9048,207 @@ Construction de l'email de confirmation de commande.
 </table>
 
 <h3>Conclusion</h3>
+Symfony Mailer : conclusion
+Il suffit d'installer le composant mailer.
+Composer require mailer
+
+Il suffit de comprendre sont fonctionnement.
+-MailerInterface :  permet de créer un mail et de l'envoyer. Mais il repose dur les transports, mais ils sont différent suivant le service de mail. Gmail, Mailchimp, MailGun, etc...
+-Par défaut il l'ai livrée avec le smtpTransport.
+Mais si on souhaite utilisé le transport Gmail.
+Il suffit de taper composer require symfony/google-mailer.
+Pour Mailchimp il suffit de composer require symfony/mailchimp-bundle.
+
+Il est aussi possible de créer notre propre service de transport en php.
+-CustomTransport : permet de créer un transport en php.
+
+<h2>Versionning avec Git</h2>
+
+git status
+On branch Doctrine
+Your branch is up to date with 'origin/Doctrine'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   .env
+        modified:   README.md
+        modified:   composer.json
+        modified:   composer.lock
+        modified:   src/EventDispatcher/ProductViewEmailSubscriber.php
+        modified:   src/EventDispatcher/PurchaseSuccessEmailSubscriber.php
+        modified:   symfony.lock
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        config/packages/mailer.yaml
+        templates/emails/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+
+<h2>Etendre Twig avec de nouveaux filtres (15 minutes)</h2>
+
+<h3>Enrichir Twig : Introduction</h3>
+
+📖 Documentation officielle de Twig : 
+https://twig.symfony.com/doc/3.x/advanced.html
+📖 Documentation (simplifiée) officielle de Symfony : 
+https://symfony.com/doc/current/templating/twig_extension.html
+
+Des syntaxes simplifiées et des fonctionnalitées intéressantes.
+comme les tags(if, for, etc...), les Heritage, blocks et les filtres.
+Mais nous pouvant étendre de nouvelle fonctionalitées.
+Nous allons créer un nouveau filtre.
+
+<h3>Créons le filtre "amount" pour afficher des prix</h3>
+
+Les filtres transforment des valeurs et retournent la donnée transformée :
+{{ "salut" | upper }} donne "SALUT"
+
+Dans notre exemple nous allons créer un filtre "amount" qui affiche des prix.
+Dans le src nous allons créer un dossier "Twig" et un fichier "AmountExtension.php" ou nous allons 
+mettre en place notre filtre.
+
+<?php
+
+namespace App\Twig;
+
+use Twig\TwigFilter;
+use Twig\Extension\AbstractExtension;
+
+class AmountExtension extends AbstractExtension
+{
+
+    public function getFilters()
+    {
+        return [
+            new TwigFilter('amount', [$this, 'amount'])
+        ];
+    }
+
+    public function amount($value)
+    {
+        //dd($value);
+        // 19229 = 192.29 €
+        $finalValue = $value / 100;
+        // 192.29
+        $finalValue = number_format($finalValue, 2, ',', ' ');
+        // 192,29 €
+
+        return $finalValue . ' €';
+    }
+}
+
+Une fois le filtre créé, il suffit de l'ajouter dans le fichier "Twig" de notre application.
+
+Exemple : _product_card.html.twig
+
+{% extends 'base.html.twig' %}
+
+<div class="card">
+	<img src="{{ p.mainPicture }}" class="img-fluid" alt="Image du produit">
+	<div class="card-body">
+		<h4 class="card-title">{{ p.name }}
+({{ p.price | amount }})</h4>
 
 
 
+		<span class="badge badge-info bg-dark">
+			{{ p.category.name }}
+		</span>
 
+		<a href="#" class="btn btn-succes btn-sm">Stock:
+			{{ p.stock }}</a>
 
+		<p class="card-text">{{ p.shortDescription }}</p>
+		<a href="{{ path('product_show', {'category_slug': p.category.slug, 'slug':p.slug } ) }}" class="btn btn-primery btn-sm">
+			Dètails</a>
+		<a href="{{ path('cart_add', {'id': p.id}) }}" class="btn btn-succes btn-sm">Ajouté</a>
 
+	</div>
+</div>
 
+Mais nous pouvant mantenant l'intégrer partout ou il y a des prix de produits.
 
+<h3>Rendre le filtre amount plus intelligent grâce aux paramètres</h3>
 
+Pour pouvoir rendre le filtre plus intelligent, nous allons ajouter des paramètres.
+Dans le fichier "AmountExtension.php" nous allons ajouter les paramètres.
+
+ public function amount($value, string $symbol = '€', string $decesp = ',', string $thousandesp = ' ')
+    
+    {
+        //dd($value);
+        // 19229 = 192.29 €
+        $finalValue = $value / 100;
+        // 192.29
+        $finalValue = number_format($finalValue, 2, ',', ' ');
+        // 192,29 €
+
+        return $finalValue . ' €';
+    }
+
+cette methode nous permet de préciser les paramètres, mais cela risque de surchager la code.
+
+Idem pour le _product_card.html.twig.
+<h4 class="card-title">{{ p.name }} ({{ p.price | amount('$', '.', ',') }})</h4>
+
+Mais l'ideal serait de pouvoir le rendre plus maléable. Donc dans le 
+AmountExtension.php nous allons ajouter un paramètre.
+// se sera des valeurs par défaut.
+public function amount($value, string $symbol = '€', string $decsep = ',', string $thousandesp = ' ')
+
+    {
+        //dd($value);
+        // 19229 = 192.29 €
+        $finalValue = $value / 100;
+        // 192.29
+        $finalValue = number_format($finalValue, 2, $decsep, $thousandesp);
+        // 192,29 €
+
+        return $finalValue . ' ' . $symbol;
+    }
+}
+
+Aprés dans le _product_card.html.twig nous pourront modifier les paramètres.
+<h4 class="card-title">{{ p.name }} ({{ p.price | amount('$', '.', ',') }})</h4>
+Il affichera la valeur en dollar 117.89$
+<h4 class="card-title">{{ p.name }} ({{ p.price | amount('$') }})</h4>
+Il affichera la valeur en dollar 117,89$ mais avec la virgule par défaut.
+<h4 class="card-title">{{ p.name }} ({{ p.price | amount }})</h4>
+Il affichera la valeur en dollar 117,89€ les valeurs par défaut.
+
+Pour rendre le filtre plus maleable il suffit de mettre des paramétres pas défaut et pas par défaut.
+
+<h3>Enrichir Twig : conclusion</h3>
+
+Twig est vraiment extensible, pour cela il faut créer une classe qui hérite de AbstractExtension.
+Il sera reconnue par le container et twig et pourra être utilisé.
+
+Elle pemetera de créer de filtre pour faire des divisions, des calculs, etc...
+Allez plus vite : une action répétée très souvant dans twig pourrait 
+devenir un filtre ou une fontion.
+
+<h3>Versionning avec Git</h3>
+git status
+
+On branch Doctrine
+Your branch is up to date with 'origin/Doctrine'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   README.md
+        modified:   templates/cart/index.html.twig
+        modified:   templates/product/_product_card.html.twig
+        modified:   templates/product/show.Html.twig
+        modified:   templates/shared/_navbar.html.twig
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        src/Twig/
+
+no changes added to commit (use "git add" and/or "git commit -a")
 
 
 
